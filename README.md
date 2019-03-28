@@ -2,9 +2,39 @@
 
 ## Activate your Virtual Environment
 
+Install virtualenv if needed
+
+```bash
+$ pip install virtualenv
+```
+
+Change to application directory, create virtual env then activate
+
+```bash
+$ virtualenv venv
+```
+
+```bash
+$ source venv/bin/activate
+```
+
+For Windows
+
+```bash
+C:\Users\some_user\project_folder> venv\Scripts\activate
+```
+
 ## Install dependencies
 
+```bash
+$ pip install -r requirements.txt
+```
+
 ## Setup Database
+
+```bash
+$ python mywi.py db setup
+```
 
 # Lands
 
