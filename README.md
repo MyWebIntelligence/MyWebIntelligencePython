@@ -1,5 +1,8 @@
 # My Web Intelligence
 
+MyWebIntelligence is a tool to create projects for research in digital humanities.
+A Sqlite database browser like https://sqlitebrowser.org/.
+
 ## Activate your Virtual Environment
 
 Install virtualenv if needed
@@ -27,13 +30,13 @@ C:\Users\some_user\project_folder> venv\Scripts\activate
 ## Install dependencies
 
 ```bash
-$ pip install -r requirements.txt
+$ venv/bin/pip install -r requirements.txt
 ```
 
 ## Setup Database
 
 ```bash
-$ python mywi.py db setup
+$ venv/bin/python mywi.py db setup
 ```
 
 # Lands
@@ -41,47 +44,54 @@ $ python mywi.py db setup
 ## Create new land
 
 ```bash
-$ python mywi.py land create --name=LAND_NAME --desc=LAND_DESCRIPTION
+$ venv/bin/python mywi.py land create --name=LAND_NAME --desc=LAND_DESCRIPTION
 ```
 
 ## List created lands
 
 ```bash
-$ python mywi.py land list
+$ venv/bin/python mywi.py land list
 ```
 
 ## Add terms to land
 
+Terms argument is a quoted list of words, space or comma separated `--terms="asthma, asthmatic"`
+
 ```bash
-$ python mywi.py land addterm --land=LAND_NAME --terms=TERMS
+$ venv/bin/python mywi.py land addterm --land=LAND_NAME --terms=TERMS
 ```
 
 ## Add url to land
 
+Urls argument is a quoted list of URL, space or comma separated `--urls="https://domain1.com/page1.html, https://domain2.com/page2.html"`.
+Path argument must point to a file containing one URL per line, file extension doesn't matter `--path=data/url_list.txt`.
+
 ```bash
-$ python mywi.py land addurl --land [--urls=URLS | --path=PATH]
+$ venv/bin/python mywi.py land addurl --land=LAND_NAME [--urls=URLS | --path=PATH]
 ```
 
 ## Delete land
 
 ```bash
-$ python mywi.py land delete --name=LAND_NAME
+$ venv/bin/python mywi.py land delete --name=LAND_NAME
 ```
 
 ## Crawl land urls
 
+Start crawling URLs. Each level of depth are processed separately. The number of URLs to crawl can be set with `--limit` argument.
+
 ```bash
-$ python mywi.py land crawl --name=LAND_NAME
+$ venv/bin/python mywi.py land crawl --name=LAND_NAME --limit=LIMIT
 ```
 
 ## Export land
 
 ```bash
-$ python mywi.py land export --name=LAND_NAME
+$ venv/bin/python mywi.py land export --name=LAND_NAME
 ```
 
 ## Print land properties
 
 ```bash
-$ python mywi.py land properties --name=LAND_NAME
+$ venv/bin/python mywi.py land properties --name=LAND_NAME
 ```

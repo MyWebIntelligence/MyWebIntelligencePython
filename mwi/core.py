@@ -4,11 +4,18 @@ Core functions
 from argparse import Namespace
 import re
 from urllib.parse import urlparse
+import nltk
 from nltk.tokenize import word_tokenize
 from nltk.stem.snowball import FrenchStemmer
 import requests
 from bs4 import BeautifulSoup
 from .model import *
+
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
 
 def confirm(message: str) -> bool:
@@ -57,10 +64,12 @@ def stem_word(word: str) -> str:
     return stem_word.stemmer.stem(word.lower())
 
 
-def crawl_land(land: Land) -> int:
+def crawl_land(land: Land, limit: int = 0) -> int:
     expressions = Expression.select()\
         .where((Expression.land == land) & Expression.fetched_at.is_null())\
         .order_by(Expression.depth)
+    if limit > 0:
+        expressions = expressions.limit(limit)
     processed = 0
     for expression in expressions:
         try:
@@ -128,7 +137,7 @@ def process_expression_content(expression: Expression, html: str):
 
     # expression.lang
     expression.html = html
-    expression.readable = content.get_text(separator=' ')
+    expression.readable = content.get_text(separator=' ').strip()
     # expression.published_at
     relevance = expression_relevance(words, expression)
     expression.relevance = relevance

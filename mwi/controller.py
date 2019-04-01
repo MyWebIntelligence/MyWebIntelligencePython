@@ -97,12 +97,16 @@ class LandController:
 
     @staticmethod
     def crawl(args: Namespace):
+        fetch_limit = 0
         check_args(args, 'name')
+        if (type(args.limit) is int) & (args.limit > 0):
+            fetch_limit = args.limit
+            print("Fetch limit is set to %s URLs" % args.limit)
         land = Land.get_or_none(Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
         else:
-            print("%d expressions processed" % crawl_land(land))
+            print("%d expressions processed" % crawl_land(land, fetch_limit))
 
     @staticmethod
     def export(args: Namespace):

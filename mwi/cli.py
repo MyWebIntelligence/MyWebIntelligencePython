@@ -16,6 +16,7 @@ def command_input():
     parser.add_argument('--terms', type=str, help='Terms to add to request dictionnary, comma separated')
     parser.add_argument('--urls', type=str, help='URL to add to request, comma separated', nargs='?')
     parser.add_argument('--path', type=str, help='Path to local file containing URLs', nargs='?')
+    parser.add_argument('--limit', type=int, help='Set limit of URLs to crawl', nargs='?', const=0)
     args = parser.parse_args()
     dispatch(args)
 
