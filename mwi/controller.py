@@ -15,8 +15,8 @@ class DbController:
         """
         if confirm("Warning, existing data will be lost, type 'Y' to proceed : "):
             tables = [Land, Expression, ExpressionLink, Word, LandDictionary, Media]
-            db.drop_tables(tables)
-            db.create_tables(tables)
+            DB.drop_tables(tables)
+            DB.create_tables(tables)
             print("Model created, setup complete")
         else:
             print("Database setup aborted")
@@ -31,7 +31,7 @@ class LandController:
         :return:
         """
         lands = Land.select().join(LandDictionary, JOIN.LEFT_OUTER).join(Word, JOIN.LEFT_OUTER)\
-            .switch(Land).join(Expression, JOIN.LEFT_OUTER).group_by(Land.name).order_by(Land.name).limit(100)
+            .switch(Land).join(Expression, JOIN.LEFT_OUTER).group_by(Land.name).order_by(Land.name)
         if lands.count() > 0:
             for land in lands:
                 exp_stats = Expression.select(fn.COUNT(Expression.id).alias('num'))\
@@ -63,10 +63,11 @@ class LandController:
             print('Land "%s" not found' % args.land)
         else:
             for term in split_arg(args.terms):
-                with db.atomic():
+                with DB.atomic():
                     word, _ = Word.get_or_create(term=term, lemma=stem_word(term))
                     LandDictionary.create(land=land.get_id(), word=word.get_id())
                     print('Term "%s" created in land %s' % (term, args.land))
+            land_relevance(land)
 
     @staticmethod
     def addurl(args: Namespace):
@@ -99,7 +100,7 @@ class LandController:
     def crawl(args: Namespace):
         fetch_limit = 0
         check_args(args, 'name')
-        if (type(args.limit) is int) & (args.limit > 0):
+        if (type(args.limit) is int) and (args.limit > 0):
             fetch_limit = args.limit
             print("Fetch limit is set to %s URLs" % args.limit)
         land = Land.get_or_none(Land.name == args.name)
@@ -110,7 +111,16 @@ class LandController:
 
     @staticmethod
     def export(args: Namespace):
-        check_args(args, 'name')
+        check_args(args, ('name', 'type'))
+        land = Land.get_or_none(Land.name == args.name)
+        if land is None:
+            print('Land "%s" not found' % args.name)
+        else:
+            types = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf']
+            if args.type in types:
+                export_land(land, args.type)
+            else:
+                print('Invalid export type "%s" [%s]' % (args.type, ', '.join(types)))
         print("Land export")
 
     @staticmethod

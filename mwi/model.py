@@ -1,12 +1,12 @@
 from peewee import *
 import datetime
 
-db = SqliteDatabase('data/mwi.db')
+DB = SqliteDatabase('data/mwi.db')
 
 
 class BaseModel(Model):
     class Meta:
-        database = db
+        database = DB
 
 
 class Land(BaseModel):

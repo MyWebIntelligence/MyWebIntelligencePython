@@ -3,6 +3,8 @@ Core functions
 """
 from argparse import Namespace
 import re
+import csv
+from lxml import etree
 from urllib.parse import urlparse
 import nltk
 from nltk.tokenize import word_tokenize
@@ -83,7 +85,6 @@ def crawl_land(land: Land, limit: int = 0) -> int:
             print(e)
             expression.http_status = '000'
             expression.fetched_at = datetime.datetime.now()
-        # @TODO
         expression.save()
     return processed
 
@@ -99,7 +100,7 @@ def add_expression(land: Land, url: str, depth=0) -> Expression:
 
 
 def link_expression(land: Land, source_expression: Expression, url: str) -> bool:
-    with db.atomic():
+    with DB.atomic():
         target_expression = add_expression(land, url, source_expression.depth + 1)
         if target_expression:
             ExpressionLink.create(source_id=source_expression.get_id(), target_id=target_expression.get_id())
@@ -115,9 +116,9 @@ def is_crawlable(url: str):
 
         return \
             (url is not None) \
-            & (parsed.path not in (None, '', '/')) \
-            & url.startswith(('http://', 'https://')) \
-            & (not url.endswith(exclude_ext))
+            and (parsed.path not in (None, '', '/')) \
+            and url.startswith(('http://', 'https://')) \
+            and (not url.endswith(exclude_ext))
     except:
         return False
 
@@ -126,22 +127,15 @@ def process_expression_content(expression: Expression, html: str):
     soup = BeautifulSoup(html, 'html.parser')
     words = get_land_dictionary(expression.land)
 
-    expression.title = soup.title.string
+    expression.title = soup.title.string.strip()
 
-    content = soup.body
-    remove_selectors = ('script', 'style', 'iframe', 'object', 'header', '#header', '.header',
-                        'footer', '#footer', '.footer', '.menu', 'nav', '.nav')
-    for selector in remove_selectors:
-        for tag in content.select(selector):
-            tag.decompose()
-
-    # expression.lang
+    content = clean_html(soup.body)
+    expression.lang = soup.html.get('lang', '')
     expression.html = html
-    expression.readable = content.get_text(separator=' ').strip()
+    expression.readable = get_readable(content)
     # expression.published_at
-    relevance = expression_relevance(words, expression)
-    expression.relevance = relevance
-    if relevance > 0:
+    expression.relevance = expression_relevance(words, expression)
+    if expression.relevance > 0:
         expression.approved_at = datetime.datetime.now()
 
         if expression.depth < 3:
@@ -150,6 +144,22 @@ def process_expression_content(expression: Expression, html: str):
                 link_expression(expression.land, expression, url)
 
     return expression
+
+
+def get_readable(content):
+    text = content.get_text(separator=' ')
+    lines = text.split("\n")
+    text_lines = [l.strip() for l in lines if (len(l.strip()) > 0)]
+    return "\n".join(text_lines)
+
+
+def clean_html(body):
+    remove_selectors = ('script', 'style', 'iframe', 'object', 'header', '#header', '.header',
+                        'footer', '#footer', '.footer', '.menu', 'nav', '.nav')
+    for selector in remove_selectors:
+        for tag in body.select(selector):
+            tag.decompose()
+    return body
 
 
 def get_land_dictionary(land: Land):
@@ -164,16 +174,91 @@ def land_relevance(land: Land):
     :return:
     """
     words = get_land_dictionary(land)
-    e_select = Expression.select().where(Expression.land == land)
-    for e in e_select:
-        e.relevance = expression_relevance(words, e)
-        e.save()
+    e_select = Expression.select().where((Expression.land == land) and (Expression.readable.is_null(False)))
+    e_count = e_select.count()
+    if e_count > 0:
+        print("Updating relevances for %d expressions, it may take some time." % e_count)
+        for e in e_select:
+            e.relevance = expression_relevance(words, e)
+            e.save()
 
 
-def expression_relevance(words, expression: Expression) -> int:
-    counter = 0
-    content = word_tokenize(expression.readable)
-    for word in content:
-        if word in words:
-            counter += 1
-    return counter
+def expression_relevance(dictionary, expression: Expression) -> int:
+    stemmed_dict = [stem_word(w) for w in dictionary]
+    occurences = []
+    try:
+        content = word_tokenize(expression.readable, language='french')
+        occurences = [word for word in content if stem_word(word) in stemmed_dict]
+    except:
+        pass
+    return len(occurences)
+
+
+def export_land(land: Land, export_type: str):
+    select, fields, extension, call_export = None, None, None, None
+
+    if export_type.startswith('page'):
+        fields = [Expression.id, Expression.url, Expression.http_status, Expression.title, Expression.lang,
+                  Expression.created_at, Expression.fetched_at, Expression.approved_at, Expression.relevance,
+                  Expression.depth]
+    elif export_type.startswith('fullpage'):
+        fields = [Expression.id, Expression.url, Expression.http_status, Expression.title, Expression.lang,
+                  Expression.readable, Expression.created_at, Expression.fetched_at, Expression.approved_at,
+                  Expression.relevance, Expression.depth]
+    # elif type.startswith('node'):
+    # @todo node export
+
+    select = Expression.select(*fields) \
+        .where(Expression.land == land) \
+        .where(Expression.approved_at.is_null(False))
+
+    if export_type.endswith('csv'):
+        extension = 'csv'
+        call_export = write_csv
+    elif export_type.endswith('gexf'):
+        extension = 'gexf'
+        call_export = write_gexf
+
+    if select is not None:
+        date_tag = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = 'data/export_%s_%s_%s.%s' % (land.name, export_type, date_tag, extension)
+        call_export(filename, select)
+        print("Successfully exported %s records to %s" % (select.count(), filename))
+
+
+def write_csv(filename, select):
+    with open(filename, 'w', newline='\n') as file:
+        writer = csv.writer(file, quoting=csv.QUOTE_ALL)
+        headers = None
+        for row in select:
+            if headers is None:
+                headers = tuple(row.__dict__['__data__'].keys())
+                writer.writerow(headers)
+            writer.writerow([str(getattr(row, f)) for f in headers])
+    file.close()
+
+
+def write_gexf(filename, select):
+    date = datetime.datetime.now().strftime("%Y-%m-%d")
+    gexf = etree.Element('gexf', attrib={
+        'xmlns': 'http://www.gexf.net/1.2draft',
+        'version': '1.2'})
+    etree.SubElement(gexf, 'meta', attrib={
+        'lastmodifieddate': date,
+        'creator': 'MyWebIntelligence'})
+    graph = etree.SubElement(gexf, 'graph', attrib={
+        'mode': 'static',
+        'defaultedgetype': 'directed'})
+    nodes = etree.SubElement(graph, 'nodes')
+    edges = etree.SubElement(graph, 'edges')
+    for row in select:
+        etree.SubElement(nodes, 'node', attrib={
+            'id': str(row.id),
+            'label': row.url})
+        for link in row.links_to:
+            etree.SubElement(edges, 'edge', attrib={
+                'id': "%s_%s" % (row.id, link.target_id),
+                'source': str(row.id),
+                'target': str(link.target_id)})
+    tree = etree.ElementTree(gexf)
+    tree.write(filename, xml_declaration=True, pretty_print=True, encoding='utf-8')
