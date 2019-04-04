@@ -240,8 +240,8 @@ def write_csv(filename, select):
 
 def write_gexf(filename, select):
     date = datetime.datetime.now().strftime("%Y-%m-%d")
-    gexf = etree.Element('gexf', attrib={
-        'xmlns': 'http://www.gexf.net/1.2draft',
+    ns = {None: 'http://www.gexf.net/1.2draft', 'viz': 'http://www.gexf.net/1.1draft/viz'}
+    gexf = etree.Element('gexf', nsmap=ns, attrib={
         'version': '1.2'})
     etree.SubElement(gexf, 'meta', attrib={
         'lastmodifieddate': date,
@@ -252,9 +252,10 @@ def write_gexf(filename, select):
     nodes = etree.SubElement(graph, 'nodes')
     edges = etree.SubElement(graph, 'edges')
     for row in select:
-        etree.SubElement(nodes, 'node', attrib={
+        node = etree.SubElement(nodes, 'node', attrib={
             'id': str(row.id),
             'label': row.url})
+        etree.SubElement(node, '{%s}size' % ns['viz'], attrib={'value': str(row.relevance)})
         for link in row.links_to:
             etree.SubElement(edges, 'edge', attrib={
                 'id': "%s_%s" % (row.id, link.target_id),
