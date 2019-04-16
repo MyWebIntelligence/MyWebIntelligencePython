@@ -4,6 +4,8 @@ Core functions
 from argparse import Namespace
 import re
 import csv
+from builtins import print
+
 from lxml import etree
 from urllib.parse import urlparse
 import nltk
@@ -123,23 +125,23 @@ def is_crawlable(url: str):
         return False
 
 
-def process_expression_content(expression: Expression, html: str):
+def process_expression_content(expression: Expression, html: str) -> Expression:
     soup = BeautifulSoup(html, 'html.parser')
     words = get_land_dictionary(expression.land)
 
     expression.title = soup.title.string.strip()
 
-    content = clean_html(soup.body)
+    clean_html(soup)
     expression.lang = soup.html.get('lang', '')
-    expression.html = html
-    expression.readable = get_readable(content)
+    expression.html = html.strip()
+    expression.readable = get_readable(soup)
     # expression.published_at
     expression.relevance = expression_relevance(words, expression)
     if expression.relevance > 0:
         expression.approved_at = datetime.datetime.now()
 
         if expression.depth < 3:
-            urls = [a.get('href') for a in content.find_all('a') if is_crawlable(a.get('href'))]
+            urls = [a.get('href') for a in soup.find_all('a') if is_crawlable(a.get('href'))]
             for url in urls:
                 link_expression(expression.land, expression, url)
 
@@ -153,18 +155,17 @@ def get_readable(content):
     return "\n".join(text_lines)
 
 
-def clean_html(body):
-    remove_selectors = ('script', 'style', 'iframe', 'object', 'header', '#header', '.header',
-                        'footer', '#footer', '.footer', '.menu', 'nav', '.nav')
+def clean_html(soup):
+    remove_selectors = ('script', 'style', 'iframe', 'form', 'footer', '.footer',
+                        'nav', '.nav', '.menu', '.social', '.modal')
     for selector in remove_selectors:
-        for tag in body.select(selector):
+        for tag in soup.select(selector):
             tag.decompose()
-    return body
 
 
 def get_land_dictionary(land: Land):
-    w_select = Word.select().join(LandDictionary, JOIN.LEFT_OUTER).where(LandDictionary.land == land)
-    return [w.term for w in w_select]
+    select = Word.select().join(LandDictionary, JOIN.LEFT_OUTER).where(LandDictionary.land == land)
+    return [w.term for w in select]
 
 
 def land_relevance(land: Land):
@@ -174,27 +175,37 @@ def land_relevance(land: Land):
     :return:
     """
     words = get_land_dictionary(land)
-    e_select = Expression.select().where((Expression.land == land) and (Expression.readable.is_null(False)))
-    e_count = e_select.count()
-    if e_count > 0:
-        print("Updating relevances for %d expressions, it may take some time." % e_count)
-        for e in e_select:
+    select = Expression.select().where((Expression.land == land) and (Expression.readable.is_null(False)))
+    row_count = select.count()
+    if row_count > 0:
+        print("Updating relevances for %d expressions, it may take some time." % row_count)
+        for e in select:
             e.relevance = expression_relevance(words, e)
             e.save()
 
 
+def get_domain(url):
+    """
+    Returns domain from url as http://sub.domain.ext/
+    :param url:
+    :return:
+    """
+    return url, url[:url.find("/", 9) + 1]
+
+
 def expression_relevance(dictionary, expression: Expression) -> int:
     stemmed_dict = [stem_word(w) for w in dictionary]
-    occurences = []
+    occurrences = []
     try:
         content = word_tokenize(expression.readable, language='french')
-        occurences = [word for word in content if stem_word(word) in stemmed_dict]
+        occurrences = [word for word in content if stem_word(word) in stemmed_dict]
     except:
         pass
-    return len(occurences)
+    return len(occurrences)
 
 
-def export_land(land: Land, export_type: str):
+def export_land(land: Land, export_type: str, minimum_relevance: int):
+    is_node_export = False
     select, fields, extension, call_export = None, None, None, None
 
     if export_type.startswith('page'):
@@ -205,12 +216,22 @@ def export_land(land: Land, export_type: str):
         fields = [Expression.id, Expression.url, Expression.http_status, Expression.title, Expression.lang,
                   Expression.readable, Expression.created_at, Expression.fetched_at, Expression.approved_at,
                   Expression.relevance, Expression.depth]
-    # elif type.startswith('node'):
-    # @todo node export
+    elif export_type.startswith('node'):
+        is_node_export = True
+        fields = [
+            Expression.id,
+            fn.REPLACE(Expression.url,
+                       fn.SUBSTR(Expression.url, fn.INSTR(fn.SUBSTR(Expression.url, 9), "/") + 9), "").alias('url'),
+            (fn.SUM(Expression.relevance) / fn.COUNT(SQL('*'))).alias('relevance')
+        ]
 
     select = Expression.select(*fields) \
         .where(Expression.land == land) \
-        .where(Expression.approved_at.is_null(False))
+        .where(Expression.approved_at.is_null(False)) \
+        .where(Expression.relevance >= minimum_relevance)
+
+    if export_type.startswith('node'):
+        select = select.group_by(SQL('url'))
 
     if export_type.endswith('csv'):
         extension = 'csv'
@@ -219,14 +240,16 @@ def export_land(land: Land, export_type: str):
         extension = 'gexf'
         call_export = write_gexf
 
-    if select is not None:
+    if (select is not None) and (select.count() > 0):
         date_tag = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         filename = 'data/export_%s_%s_%s.%s' % (land.name, export_type, date_tag, extension)
-        call_export(filename, select)
+        call_export(filename, select, is_node_export)
         print("Successfully exported %s records to %s" % (select.count(), filename))
+    else:
+        print("No records to export, check crawling state or lower minimum relevance threshold")
 
 
-def write_csv(filename, select):
+def write_csv(filename, select, is_node_export):
     with open(filename, 'w', newline='\n') as file:
         writer = csv.writer(file, quoting=csv.QUOTE_ALL)
         headers = None
@@ -238,7 +261,7 @@ def write_csv(filename, select):
     file.close()
 
 
-def write_gexf(filename, select):
+def write_gexf(filename, select, is_node_export):
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     ns = {None: 'http://www.gexf.net/1.2draft', 'viz': 'http://www.gexf.net/1.1draft/viz'}
     gexf = etree.Element('gexf', nsmap=ns, attrib={
@@ -256,10 +279,15 @@ def write_gexf(filename, select):
             'id': str(row.id),
             'label': row.url})
         etree.SubElement(node, '{%s}size' % ns['viz'], attrib={'value': str(row.relevance)})
-        for link in row.links_to:
-            etree.SubElement(edges, 'edge', attrib={
-                'id': "%s_%s" % (row.id, link.target_id),
-                'source': str(row.id),
-                'target': str(link.target_id)})
+        if is_node_export:
+            for link in row.links_to:
+                Expression.get_by_id(link)
+            return
+        else:
+            for link in row.links_to:
+                etree.SubElement(edges, 'edge', attrib={
+                    'id': "%s_%s" % (row.id, link.target_id),
+                    'source': str(row.id),
+                    'target': str(link.target_id)})
     tree = etree.ElementTree(gexf)
     tree.write(filename, xml_declaration=True, pretty_print=True, encoding='utf-8')

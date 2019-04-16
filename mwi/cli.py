@@ -17,6 +17,7 @@ def command_input():
     parser.add_argument('--urls', type=str, help='URL to add to request, comma separated', nargs='?')
     parser.add_argument('--path', type=str, help='Path to local file containing URLs', nargs='?')
     parser.add_argument('--limit', type=int, help='Set limit of URLs to crawl', nargs='?', const=0)
+    parser.add_argument('--minrel', type=int, help='Set minimum relevance threshold for exports', nargs='?', const=0)
     args = parser.parse_args()
     dispatch(args)
 

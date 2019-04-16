@@ -102,7 +102,7 @@ class LandController:
         check_args(args, 'name')
         if (type(args.limit) is int) and (args.limit > 0):
             fetch_limit = args.limit
-            print("Fetch limit is set to %s URLs" % args.limit)
+            print("Fetch limit is set to %s URLs" % fetch_limit)
         land = Land.get_or_none(Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
@@ -111,14 +111,18 @@ class LandController:
 
     @staticmethod
     def export(args: Namespace):
+        minimum_relevance = 1
         check_args(args, ('name', 'type'))
+        if (type(args.minrel) is int) and (args.minrel >= 0):
+            minimum_relevance = args.minrel
+            print("Minimum relevance set to %s" % minimum_relevance)
         land = Land.get_or_none(Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
         else:
             types = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf']
             if args.type in types:
-                export_land(land, args.type)
+                export_land(land, args.type, minimum_relevance)
             else:
                 print('Invalid export type "%s" [%s]' % (args.type, ', '.join(types)))
         print("Land export")

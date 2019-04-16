@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import settings
 from mwi import cli
 
 
