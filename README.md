@@ -86,6 +86,8 @@ $ venv/bin/python mywi.py land crawl --name=LAND_NAME --limit=LIMIT
 
 ## Export land
 
+type = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf']
+
 ```bash
 $ venv/bin/python mywi.py land export --name=LAND_NAME --type=EXPORT_TYPE --minrel=MINIMUM_RELEVANCE
 ```
