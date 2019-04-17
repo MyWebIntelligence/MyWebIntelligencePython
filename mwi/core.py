@@ -280,9 +280,12 @@ def write_gexf(filename, select, is_node_export):
             'label': row.url})
         etree.SubElement(node, '{%s}size' % ns['viz'], attrib={'value': str(row.relevance)})
         if is_node_export:
+            # @todo link nodes 
             for link in row.links_to:
-                Expression.get_by_id(link)
-            return
+                etree.SubElement(edges, 'edge', attrib={
+                    'id': "%s_%s" % (row.id, link.target_id),
+                    'source': str(row.id),
+                    'target': str(link.target_id)})
         else:
             for link in row.links_to:
                 etree.SubElement(edges, 'edge', attrib={
