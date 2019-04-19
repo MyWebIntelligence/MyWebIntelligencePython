@@ -4,8 +4,6 @@ Core functions
 from argparse import Namespace
 import re
 import csv
-from builtins import print
-
 from lxml import etree
 from urllib.parse import urlparse
 import nltk
@@ -216,7 +214,7 @@ def get_land_dictionary(land: Land):
 
 def land_relevance(land: Land):
     """
-    Compute relevance against land dictionary for each expression in land
+    Start relevance computing according to land dictionary for each expression in land
     :param land:
     :return:
     """
@@ -228,15 +226,6 @@ def land_relevance(land: Land):
         for e in select:
             e.relevance = expression_relevance(words, e)
             e.save()
-
-
-def get_domain(url):
-    """
-    Returns domain from url as http://sub.domain.ext/
-    :param url:
-    :return:
-    """
-    return url, url[:url.find("/", 9) + 1]
 
 
 def expression_relevance(dictionary, expression: Expression) -> int:
@@ -264,7 +253,7 @@ def export_land(land: Land, export_type: str, minimum_relevance: int):
     :param minimum_relevance:
     :return:
     """
-    select, fields, extension, call_export = None, None, None, None
+    fields, extension, call_export = None, None, None
 
     if export_type.startswith('page'):
         fields = [Expression.id, Expression.url, Expression.http_status, Expression.title, Expression.lang,
@@ -314,7 +303,6 @@ def write_csv(filename, select):
     Write CSV file
     :param filename:
     :param select:
-    :param is_node_export:
     :return:
     """
     with open(filename, 'w', newline='\n') as file:
@@ -333,7 +321,6 @@ def write_gexf(filename, select):
     Write GEXF file
     :param filename:
     :param select:
-    :param is_node_export:
     :return:
     """
     size_factor = 10
@@ -370,3 +357,12 @@ def write_gexf(filename, select):
 
     tree = etree.ElementTree(gexf)
     tree.write(filename, xml_declaration=True, pretty_print=True, encoding='utf-8')
+
+
+def get_domain(url):
+    """
+    Returns domain from any url as http://sub.domain.ext/
+    :param url:
+    :return:
+    """
+    return url, url[:url.find("/", 9) + 1]
