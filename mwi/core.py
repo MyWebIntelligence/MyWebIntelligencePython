@@ -69,6 +69,12 @@ def stem_word(word: str) -> str:
 
 
 def crawl_land(land: Land, limit: int = 0) -> int:
+    """
+    Start land crawl
+    :param land:
+    :param limit:
+    :return:
+    """
     expressions = Expression.select()\
         .where((Expression.land == land) & Expression.fetched_at.is_null())\
         .order_by(Expression.depth)
@@ -92,6 +98,13 @@ def crawl_land(land: Land, limit: int = 0) -> int:
 
 
 def add_expression(land: Land, url: str, depth=0) -> Expression:
+    """
+    Add expression to land
+    :param land:
+    :param url:
+    :param depth:
+    :return:
+    """
     if is_crawlable(url):
         expression = Expression.get_or_none(Expression.url == url)
         if expression is None:
@@ -102,6 +115,13 @@ def add_expression(land: Land, url: str, depth=0) -> Expression:
 
 
 def link_expression(land: Land, source_expression: Expression, url: str) -> bool:
+    """
+    Link target expression to source expression
+    :param land:
+    :param source_expression:
+    :param url:
+    :return:
+    """
     with DB.atomic():
         target_expression = add_expression(land, url, source_expression.depth + 1)
         if target_expression:
@@ -111,6 +131,11 @@ def link_expression(land: Land, source_expression: Expression, url: str) -> bool
 
 
 def is_crawlable(url: str):
+    """
+    Checks whether an URL is valid for crawling
+    :param url:
+    :return:
+    """
     try:
         parsed = urlparse(url)
         exclude_ext = ('.jpg', '.jpeg', '.png', '.bmp', '.webp', '.pdf',
@@ -126,6 +151,12 @@ def is_crawlable(url: str):
 
 
 def process_expression_content(expression: Expression, html: str) -> Expression:
+    """
+    Process expression fields from HTML content
+    :param expression:
+    :param html:
+    :return:
+    """
     soup = BeautifulSoup(html, 'html.parser')
     words = get_land_dictionary(expression.land)
 
@@ -149,6 +180,11 @@ def process_expression_content(expression: Expression, html: str) -> Expression:
 
 
 def get_readable(content):
+    """
+    Get readable part of HTML content
+    :param content:
+    :return:
+    """
     text = content.get_text(separator=' ')
     lines = text.split("\n")
     text_lines = [l.strip() for l in lines if (len(l.strip()) > 0)]
@@ -156,6 +192,11 @@ def get_readable(content):
 
 
 def clean_html(soup):
+    """
+    Get rid of DOM objects with no valuable content
+    :param soup:
+    :return:
+    """
     remove_selectors = ('script', 'style', 'iframe', 'form', 'footer', '.footer',
                         'nav', '.nav', '.menu', '.social', '.modal')
     for selector in remove_selectors:
@@ -164,6 +205,11 @@ def clean_html(soup):
 
 
 def get_land_dictionary(land: Land):
+    """
+    Get land dictionary
+    :param land:
+    :return:
+    """
     select = Word.select().join(LandDictionary, JOIN.LEFT_OUTER).where(LandDictionary.land == land)
     return [w.term for w in select]
 
@@ -194,6 +240,12 @@ def get_domain(url):
 
 
 def expression_relevance(dictionary, expression: Expression) -> int:
+    """
+    Compute expression relevance according to land dictionary
+    :param dictionary:
+    :param expression:
+    :return:
+    """
     stemmed_dict = [stem_word(w) for w in dictionary]
     occurrences = []
     try:
@@ -205,7 +257,13 @@ def expression_relevance(dictionary, expression: Expression) -> int:
 
 
 def export_land(land: Land, export_type: str, minimum_relevance: int):
-    is_node_export = False
+    """
+    Export land data
+    :param land:
+    :param export_type:
+    :param minimum_relevance:
+    :return:
+    """
     select, fields, extension, call_export = None, None, None, None
 
     if export_type.startswith('page'):
@@ -217,12 +275,14 @@ def export_land(land: Land, export_type: str, minimum_relevance: int):
                   Expression.readable, Expression.created_at, Expression.fetched_at, Expression.approved_at,
                   Expression.relevance, Expression.depth]
     elif export_type.startswith('node'):
-        is_node_export = True
+        domain_select = fn.REPLACE(Expression.url,
+                                   fn.SUBSTR(Expression.url, fn.INSTR(fn.SUBSTR(Expression.url, 9), "/") + 9),
+                                   "")
         fields = [
             Expression.id,
-            fn.REPLACE(Expression.url,
-                       fn.SUBSTR(Expression.url, fn.INSTR(fn.SUBSTR(Expression.url, 9), "/") + 9), "").alias('url'),
-            (fn.SUM(Expression.relevance) / fn.COUNT(SQL('*'))).alias('relevance')
+            domain_select.alias('url'),
+            domain_select.alias('domain'),
+            fn.COUNT(SQL('*')).alias('relevance')
         ]
 
     select = Expression.select(*fields) \
@@ -231,7 +291,7 @@ def export_land(land: Land, export_type: str, minimum_relevance: int):
         .where(Expression.relevance >= minimum_relevance)
 
     if export_type.startswith('node'):
-        select = select.group_by(SQL('url'))
+        select = select.group_by(SQL('domain'))
 
     if export_type.endswith('csv'):
         extension = 'csv'
@@ -243,13 +303,20 @@ def export_land(land: Land, export_type: str, minimum_relevance: int):
     if (select is not None) and (select.count() > 0):
         date_tag = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         filename = 'data/export_%s_%s_%s.%s' % (land.name, export_type, date_tag, extension)
-        call_export(filename, select, is_node_export)
+        call_export(filename, select)
         print("Successfully exported %s records to %s" % (select.count(), filename))
     else:
         print("No records to export, check crawling state or lower minimum relevance threshold")
 
 
-def write_csv(filename, select, is_node_export):
+def write_csv(filename, select):
+    """
+    Write CSV file
+    :param filename:
+    :param select:
+    :param is_node_export:
+    :return:
+    """
     with open(filename, 'w', newline='\n') as file:
         writer = csv.writer(file, quoting=csv.QUOTE_ALL)
         headers = None
@@ -261,7 +328,16 @@ def write_csv(filename, select, is_node_export):
     file.close()
 
 
-def write_gexf(filename, select, is_node_export):
+def write_gexf(filename, select):
+    """
+    Write GEXF file
+    :param filename:
+    :param select:
+    :param is_node_export:
+    :return:
+    """
+    size_factor = 10
+    links = {}
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     ns = {None: 'http://www.gexf.net/1.2draft', 'viz': 'http://www.gexf.net/1.1draft/viz'}
     gexf = etree.Element('gexf', nsmap=ns, attrib={
@@ -274,23 +350,23 @@ def write_gexf(filename, select, is_node_export):
         'defaultedgetype': 'directed'})
     nodes = etree.SubElement(graph, 'nodes')
     edges = etree.SubElement(graph, 'edges')
+
     for row in select:
         node = etree.SubElement(nodes, 'node', attrib={
             'id': str(row.id),
             'label': row.url})
-        etree.SubElement(node, '{%s}size' % ns['viz'], attrib={'value': str(row.relevance)})
-        if is_node_export:
-            # @todo link nodes 
-            for link in row.links_to:
-                etree.SubElement(edges, 'edge', attrib={
-                    'id': "%s_%s" % (row.id, link.target_id),
-                    'source': str(row.id),
-                    'target': str(link.target_id)})
-        else:
-            for link in row.links_to:
-                etree.SubElement(edges, 'edge', attrib={
-                    'id': "%s_%s" % (row.id, link.target_id),
-                    'source': str(row.id),
-                    'target': str(link.target_id)})
+        etree.SubElement(node, '{%s}size' % ns['viz'], attrib={'value': str(row.relevance * size_factor)})
+        links[row.id] = []
+
+        for link in row.links_to:
+            links[row.id].append(link.target_id)
+
+    for source, targets in links.items():
+        for target in [x for x in targets if x in links]:
+            etree.SubElement(edges, 'edge', attrib={
+                'id': "%s_%s" % (source, target),
+                'source': str(source),
+                'target': str(target)})
+
     tree = etree.ElementTree(gexf)
     tree.write(filename, xml_declaration=True, pretty_print=True, encoding='utf-8')
