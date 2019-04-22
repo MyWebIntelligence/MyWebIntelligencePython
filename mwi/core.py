@@ -253,34 +253,8 @@ def export_land(land: Land, export_type: str, minimum_relevance: int):
     :param minimum_relevance:
     :return:
     """
-    fields, extension, call_export = None, None, None
-
-    if export_type.startswith('page'):
-        fields = [Expression.id, Expression.url, Expression.http_status, Expression.title, Expression.lang,
-                  Expression.created_at, Expression.fetched_at, Expression.approved_at, Expression.relevance,
-                  Expression.depth]
-    elif export_type.startswith('fullpage'):
-        fields = [Expression.id, Expression.url, Expression.http_status, Expression.title, Expression.lang,
-                  Expression.readable, Expression.created_at, Expression.fetched_at, Expression.approved_at,
-                  Expression.relevance, Expression.depth]
-    elif export_type.startswith('node'):
-        domain_select = fn.REPLACE(Expression.url,
-                                   fn.SUBSTR(Expression.url, fn.INSTR(fn.SUBSTR(Expression.url, 9), "/") + 9),
-                                   "")
-        fields = [
-            Expression.id,
-            domain_select.alias('url'),
-            domain_select.alias('domain'),
-            fn.COUNT(SQL('*')).alias('relevance')
-        ]
-
-    select = Expression.select(*fields) \
-        .where(Expression.land == land) \
-        .where(Expression.approved_at.is_null(False)) \
-        .where(Expression.relevance >= minimum_relevance)
-
-    if export_type.startswith('node'):
-        select = select.group_by(SQL('domain'))
+    extension, call_export = None, None
+    select = get_export_select(export_type, land, minimum_relevance)
 
     if export_type.endswith('csv'):
         extension = 'csv'
@@ -296,6 +270,53 @@ def export_land(land: Land, export_type: str, minimum_relevance: int):
         print("Successfully exported %s records to %s" % (select.count(), filename))
     else:
         print("No records to export, check crawling state or lower minimum relevance threshold")
+
+
+def get_export_select(export_type: str, land: Land, minimum_relevance: int):
+    """
+    Get ModelSelect for export task
+    :param export_type:
+    :param land:
+    :param minimum_relevance:
+    :return:
+    """
+    fields = [Expression.id,
+              Expression.url,
+              Expression.http_status,
+              Expression.title,
+              Expression.lang,
+              Expression.created_at,
+              Expression.fetched_at,
+              Expression.approved_at,
+              Expression.relevance,
+              Expression.depth]
+
+    if export_type.startswith('fullpage'):
+        fields.append(Expression.readable)
+    elif export_type.startswith('node'):
+        url_select = fn.REPLACE(Expression.url, 'https:', 'http:')
+        domain_select = fn.TRIM(
+            fn.REPLACE(
+                fn.REPLACE(url_select, fn.SUBSTR(url_select, fn.INSTR(fn.SUBSTR(url_select, 9), "/") + 9), ""),
+                "http:",
+                ""),
+            "/")
+        fields = [Expression.id,
+                  domain_select.alias('url'),
+                  domain_select.alias('domain'),
+                  fn.COUNT(SQL('*')).alias('relevance')]
+
+    select = Expression.select(*fields).where(Expression.land == land)
+
+    if minimum_relevance > 0:
+        select = select.where(Expression.relevance >= minimum_relevance)
+    else:
+        select = select.where(Expression.relevance.is_null(False))
+
+    if export_type.startswith('node'):
+        select = select.group_by(SQL('domain'))
+
+    return select
 
 
 def write_csv(filename, select):
@@ -319,11 +340,11 @@ def write_csv(filename, select):
 def write_gexf(filename, select):
     """
     Write GEXF file
+    @todo node size factor ?
     :param filename:
     :param select:
     :return:
     """
-    size_factor = 10
     links = {}
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     ns = {None: 'http://www.gexf.net/1.2draft', 'viz': 'http://www.gexf.net/1.1draft/viz'}
@@ -342,7 +363,7 @@ def write_gexf(filename, select):
         node = etree.SubElement(nodes, 'node', attrib={
             'id': str(row.id),
             'label': row.url})
-        etree.SubElement(node, '{%s}size' % ns['viz'], attrib={'value': str(row.relevance * size_factor)})
+        etree.SubElement(node, '{%s}size' % ns['viz'], attrib={'value': str(row.relevance)})
         links[row.id] = []
 
         for link in row.links_to:
@@ -359,10 +380,10 @@ def write_gexf(filename, select):
     tree.write(filename, xml_declaration=True, pretty_print=True, encoding='utf-8')
 
 
-def get_domain(url):
+def get_domain(url: str) -> str:
     """
     Returns domain from any url as http://sub.domain.ext/
     :param url:
     :return:
     """
-    return url, url[:url.find("/", 9) + 1]
+    return re.sub('^https?://', '', url[:url.find("/", 9) + 1]).strip('/')
