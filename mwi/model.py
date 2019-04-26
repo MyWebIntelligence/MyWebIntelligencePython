@@ -16,7 +16,7 @@ class Land(BaseModel):
 
 
 class Expression(BaseModel):
-    land = ForeignKeyField(Land, backref='expressions')
+    land = ForeignKeyField(Land, backref='expressions', on_delete='CASCADE')
     url = TextField()
     http_status = CharField(max_length=3, null=True)
     title = CharField(null=True)
@@ -34,8 +34,8 @@ class Expression(BaseModel):
 class ExpressionLink(BaseModel):
     class Meta:
         primary_key = CompositeKey('source', 'target')
-    source = ForeignKeyField(Expression, backref='links_to')
-    target = ForeignKeyField(Expression, backref='linked_by')
+    source = ForeignKeyField(Expression, backref='links_to', on_delete='CASCADE')
+    target = ForeignKeyField(Expression, backref='linked_by', on_delete='CASCADE')
 
 
 class Word(BaseModel):
@@ -46,11 +46,11 @@ class Word(BaseModel):
 class LandDictionary(BaseModel):
     class Meta:
         primary_key = CompositeKey('land', 'word')
-    land = ForeignKeyField(Land, backref='words')
-    word = ForeignKeyField(Word, backref='lands')
+    land = ForeignKeyField(Land, backref='words', on_delete='CASCADE')
+    word = ForeignKeyField(Word, backref='lands', on_delete='CASCADE')
 
 
 class Media(BaseModel):
-    expression = ForeignKeyField(Expression, backref='medias')
+    expression = ForeignKeyField(Expression, backref='medias', on_delete='CASCADE')
     url = TextField()
     type = CharField(max_length=30)

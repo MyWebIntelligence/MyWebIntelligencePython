@@ -390,7 +390,7 @@ def get_domain(url: str) -> str:
     return re.sub('^https?://', '', url[:url.find("/", 9) + 1]).strip('/')
 
 
-def remove_anchor(url: str):
+def remove_anchor(url: str) -> str:
     """
     Removes anchor from URL
     :param url:
