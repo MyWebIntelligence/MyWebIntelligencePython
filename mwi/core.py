@@ -103,6 +103,7 @@ def add_expression(land: Land, url: str, depth=0) -> Expression:
     :param depth:
     :return:
     """
+    url = remove_anchor(url)
     if is_crawlable(url):
         expression = Expression.get_or_none(Expression.url == url)
         if expression is None:
@@ -387,3 +388,13 @@ def get_domain(url: str) -> str:
     :return:
     """
     return re.sub('^https?://', '', url[:url.find("/", 9) + 1]).strip('/')
+
+
+def remove_anchor(url: str):
+    """
+    Removes anchor from URL
+    :param url:
+    :return:
+    """
+    anchor_pos = url.find('#')
+    return url[:anchor_pos] if anchor_pos > 0 else url

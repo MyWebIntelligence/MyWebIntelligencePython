@@ -15,3 +15,23 @@ def test_check_args_missing_mandatory():
     with pytest.raises(Exception):
         check_args(args, ("a", "b"))
     assert True
+
+
+def test_get_domain():
+    """
+    Test domain extraction from any url
+    :param url:
+    :return:
+    """
+    assert get_domain("https://www.domain.com/test.html") == "www.domain.com"
+
+
+def test_remove_anchor():
+    """
+    Test anchor removing
+    :return:
+    """
+    url = "http://www.example.com/path/to/doc.html"
+    a = remove_anchor("http://www.example.com/path/to/doc.html#page=1&comment=12356") == url
+    b = remove_anchor("http://www.example.com/path/to/doc.html") == url
+    assert a and b
