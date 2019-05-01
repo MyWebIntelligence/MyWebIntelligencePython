@@ -81,7 +81,7 @@ $ venv/bin/python mywi.py land delete --name=LAND_NAME
 Start crawling URLs. Each level of depth are processed separately. The number of URLs to crawl can be set with `--limit` argument.
 
 ```bash
-$ venv/bin/python mywi.py land crawl --name=LAND_NAME --limit=LIMIT
+$ venv/bin/python mywi.py land crawl --name=LAND_NAME [--limit=LIMIT]
 ```
 
 ## Export land
@@ -96,4 +96,18 @@ $ venv/bin/python mywi.py land export --name=LAND_NAME --type=EXPORT_TYPE --minr
 
 ```bash
 $ venv/bin/python mywi.py land properties --name=LAND_NAME
+```
+
+## Crawl domains
+
+Get info from domains created after expression addition
+
+```bash
+$ venv/bin/python mywi.py domain crawl [--limit=LIMIT]
+```
+
+## Update domains from heuristic settings
+
+```bash
+$ venv/bin/python mywi.py heuristic update
 ```

@@ -14,7 +14,7 @@ class DbController:
         :return:
         """
         if confirm("Warning, existing data will be lost, type 'Y' to proceed : "):
-            tables = [Land, Expression, ExpressionLink, Word, LandDictionary, Media]
+            tables = [Land, Domain, Expression, ExpressionLink, Word, LandDictionary, Media]
             DB.drop_tables(tables)
             DB.create_tables(tables)
             print("Model created, setup complete")
@@ -52,7 +52,8 @@ class LandController:
         :return:
         """
         check_args(args, ('name', 'desc'))
-        Land.create(name=args.name, description=args.desc)
+        land = Land.create(name=args.name, description=args.desc)
+        os.makedirs('data/lands/%s' % land.get_id(), exist_ok=True)
         print('Land "%s" created' % args.name)
 
     @staticmethod
@@ -98,11 +99,8 @@ class LandController:
 
     @staticmethod
     def crawl(args: Namespace):
-        fetch_limit = 0
         check_args(args, 'name')
-        if (type(args.limit) is int) and (args.limit > 0):
-            fetch_limit = args.limit
-            print("Fetch limit is set to %s URLs" % fetch_limit)
+        fetch_limit = get_arg_limit(args)
         land = Land.get_or_none(Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
@@ -131,3 +129,16 @@ class LandController:
     def properties(args: Namespace):
         check_args(args, 'name')
         print("Land properties")
+
+
+class DomainController:
+    @staticmethod
+    def crawl(args: Namespace):
+        fetch_limit = get_arg_limit(args)
+        print("%d domains processed" % crawl_domains(fetch_limit))
+
+
+class HeuristicController:
+    @staticmethod
+    def update(args: Namespace):
+        update_heuristic()

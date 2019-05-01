@@ -22,7 +22,7 @@ def test_get_domain():
     Test domain extraction from any url
     :return:
     """
-    assert get_domain("https://www.domain.com/test.html") == "www.domain.com"
+    assert get_domain_name("https://www.domain.com/test.html") == "www.domain.com"
 
 
 def test_remove_anchor():

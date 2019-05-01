@@ -27,6 +27,9 @@ def dispatch(args):
         'db': {
             'setup': DbController.setup
         },
+        'domain': {
+            'crawl': DomainController.crawl
+        },
         'land': {
             'list':    LandController.list,
             'create':  LandController.create,
@@ -37,6 +40,9 @@ def dispatch(args):
             'addurl':  LandController.addurl,
             'props':   LandController.properties
         },
+        'heuristic': {
+            'update': HeuristicController.update
+        }
     }
     controller = controllers.get(args.object)
     if controller:

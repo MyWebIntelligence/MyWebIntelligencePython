@@ -12,6 +12,7 @@ from nltk.stem.snowball import FrenchStemmer
 import requests
 from bs4 import BeautifulSoup
 from .model import *
+import settings
 
 
 try:
@@ -55,6 +56,19 @@ def split_arg(arg: str) -> list:
     return [a for a in args if a]
 
 
+def get_arg_limit(args: Namespace):
+    """
+    Returns value from optional argument "limit"
+    :param args:
+    :return:
+    """
+    fetch_limit = 0
+    if (type(args.limit) is int) and (args.limit > 0):
+        fetch_limit = args.limit
+        print("Fetch limit set to %s" % fetch_limit)
+    return fetch_limit
+
+
 def stem_word(word: str) -> str:
     """
     Stems word with NLTK Snowball FrenchStemmer
@@ -64,6 +78,54 @@ def stem_word(word: str) -> str:
     if 'stemmer' not in stem_word.__dict__:
         stem_word.stemmer = FrenchStemmer()
     return stem_word.stemmer.stem(word.lower())
+
+
+def crawl_domains(limit: int = 0):
+    """
+    Crawl domains to retrieve info
+    :param limit:
+    :return:
+    """
+    domains = Domain.select().where(Domain.fetched_at.is_null())
+    if limit > 0:
+        domains = domains.limit(limit)
+    processed = 0
+    for domain in domains:
+        try:
+            r = requests.get("%s://%s" % (domain.schema, domain.name))
+            domain.fetched_at = datetime.datetime.now()
+            if ('html' in r.headers['content-type']) and (r.status_code == 200):
+                process_domain_content(domain, r.text)
+                processed += 1
+        except Exception as e:
+            print(e)
+            domain.fetched_at = datetime.datetime.now()
+        domain.save()
+    return processed
+
+
+def process_domain_content(domain: Domain, html: str):
+    """
+    Process domain info from HTML
+    :param domain:
+    :param html:
+    :return:
+    """
+    soup = BeautifulSoup(html, 'html.parser')
+    domain.title = soup.title.string.strip()
+    domain.description = get_meta_content(soup, 'description')
+    domain.keywords = get_meta_content(soup, 'keywords')
+
+
+def get_meta_content(soup: BeautifulSoup, name: str):
+    """
+    Get named meta content property
+    :param soup:
+    :param name:
+    :return:
+    """
+    tag = soup.find('meta', attrs={'name': name})
+    return tag['content'] if tag else ''
 
 
 def crawl_land(land: Land, limit: int = 0) -> int:
@@ -79,12 +141,12 @@ def crawl_land(land: Land, limit: int = 0) -> int:
     if limit > 0:
         expressions = expressions.limit(limit)
     processed = 0
-    for expression in expressions:
+    for expression in list(expressions):
         try:
             r = requests.get(expression.url)
             expression.http_status = r.status_code
             expression.fetched_at = datetime.datetime.now()
-            if ('html' in r.headers['content-type']) & (r.status_code == 200):
+            if ('html' in r.headers['content-type']) and (r.status_code == 200):
                 process_expression_content(expression, r.text)
                 processed += 1
         except Exception as e:
@@ -105,12 +167,39 @@ def add_expression(land: Land, url: str, depth=0) -> Expression:
     """
     url = remove_anchor(url)
     if is_crawlable(url):
+        domain_name = get_domain_name(url)
+        domain = Domain.get_or_create(schema=url[:url.find(':')], name=domain_name)[0]
         expression = Expression.get_or_none(Expression.url == url)
         if expression is None:
-            expression = Expression.create(land=land, url=url, depth=depth)
-            return expression
+            expression = Expression.create(land=land, domain=domain, url=url, depth=depth)
         else:
             print("URL %s already exists in land" % url)
+        return expression
+
+
+def get_domain_name(url: str) -> str:
+    """
+    Returns domain from any url as sub.domain.ext or according to heuristics settings
+    :param url:
+    :return:
+    """
+    domain_name = re.sub('^https?://', '', url[:url.find("/", 9) + 1]).strip('/')
+    for k, v in settings.heuristics.items():
+        if domain_name.endswith(k):
+            matches = re.findall(v, url)
+            domain_name = matches[0] if matches else domain_name
+
+    return domain_name
+
+
+def remove_anchor(url: str) -> str:
+    """
+    Removes anchor from URL
+    :param url:
+    :return:
+    """
+    anchor_pos = url.find('#')
+    return url[:anchor_pos] if anchor_pos > 0 else url
 
 
 def link_expression(land: Land, source_expression: Expression, url: str) -> bool:
@@ -124,8 +213,11 @@ def link_expression(land: Land, source_expression: Expression, url: str) -> bool
     with DB.atomic():
         target_expression = add_expression(land, url, source_expression.depth + 1)
         if target_expression:
-            ExpressionLink.create(source_id=source_expression.get_id(), target_id=target_expression.get_id())
-            return True
+            try:
+                ExpressionLink.create(source_id=source_expression.get_id(), target_id=target_expression.get_id())
+                return True
+            except IntegrityError:
+                print("Link from %s to %s already exists" % (source_expression.get_id(), target_expression.get_id()))
     return False
 
 
@@ -163,7 +255,8 @@ def process_expression_content(expression: Expression, html: str) -> Expression:
 
     clean_html(soup)
     expression.lang = soup.html.get('lang', '')
-    expression.html = html.strip()
+    with open('data/lands/%s/%s' % (expression.land.get_id(), expression.get_id()), 'w') as html_file:
+        html_file.write(html.strip())
     expression.readable = get_readable(soup)
     # expression.published_at
     expression.relevance = expression_relevance(words, expression)
@@ -283,6 +376,8 @@ def get_export_select(export_type: str, land: Land, minimum_relevance: int):
     """
     fields = [Expression.id,
               Expression.url,
+              Expression.domain.id,
+              Expression.domain.name,
               Expression.http_status,
               Expression.title,
               Expression.lang,
@@ -381,20 +476,20 @@ def write_gexf(filename, select):
     tree.write(filename, xml_declaration=True, pretty_print=True, encoding='utf-8')
 
 
-def get_domain(url: str) -> str:
+def update_heuristic():
     """
-    Returns domain from any url as http://sub.domain.ext/
-    :param url:
+    Update domains according to heuristic settings
     :return:
     """
-    return re.sub('^https?://', '', url[:url.find("/", 9) + 1]).strip('/')
-
-
-def remove_anchor(url: str) -> str:
-    """
-    Removes anchor from URL
-    :param url:
-    :return:
-    """
-    anchor_pos = url.find('#')
-    return url[:anchor_pos] if anchor_pos > 0 else url
+    domains = list(Domain.select().dicts())
+    domains = {x['id']: x for x in domains}
+    expressions = Expression.select()
+    updated = 0
+    for expression in expressions:
+        domain = get_domain_name(expression.url)
+        if domain != domains[expression.domain_id]['name']:
+            domain_to_update = Domain.get_by_id(expression.domain_id)
+            domain_to_update.name = domain
+            domain_to_update.save()
+            updated += 1
+    print("%d domain(s) updated" % updated)
