@@ -1,7 +1,7 @@
 # My Web Intelligence
 
 MyWebIntelligence is a tool to create projects for research in digital humanities.
-A Sqlite database browser like https://sqlitebrowser.org/.
+A Sqlite database browser like https://sqlitebrowser.org/ may be useful.
 
 ## Activate your Virtual Environment
 
