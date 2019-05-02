@@ -17,12 +17,17 @@ class Land(BaseModel):
 
 class Domain(BaseModel):
     schema = CharField()
-    name = CharField(unique=True)
+    name = CharField()
     title = TextField(null=True)
     description = TextField(null=True)
     keywords = TextField(null=True)
     created_at = DateTimeField(default=datetime.datetime.now)
     fetched_at = DateTimeField(null=True)
+
+    class Meta:
+        indexes = (
+            (('schema', 'name'), True),
+        )
 
 
 class Expression(BaseModel):
