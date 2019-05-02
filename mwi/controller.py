@@ -5,7 +5,6 @@ import os
 from .core import *
 from .model import *
 
-
 class DbController:
     @staticmethod
     def setup(args: Namespace):
@@ -19,6 +18,7 @@ class DbController:
             DB.drop_tables(tables)
             DB.create_tables(tables)
             print("Model created, setup complete")
+            return 1
         else:
             print("Database setup aborted")
 
@@ -42,6 +42,7 @@ class LandController:
                 print("%s - (%s)\n\t%s" % (land.name, land.created_at.strftime("%B %d %Y %H:%M"), land.description))
                 print("\t%s terms in land dictionary %s" % (land.words.count(), [d.word.term for d in land.words]))
                 print("\t%s expressions in land (%s remaining to crawl)" % (land.expressions.count(), to_crawl[0]))
+            return 1
         else:
             print("No land created")
 
@@ -56,6 +57,7 @@ class LandController:
         land = Land.create(name=args.name, description=args.desc)
         os.makedirs('data/lands/%s' % land.get_id(), exist_ok=True)
         print('Land "%s" created' % args.name)
+        return 1
 
     @staticmethod
     def addterm(args: Namespace):
@@ -70,6 +72,8 @@ class LandController:
                     LandDictionary.create(land=land.get_id(), word=word.get_id())
                     print('Term "%s" created in land %s' % (term, args.land))
             land_relevance(land)
+            return 1
+
 
     @staticmethod
     def addurl(args: Namespace):
@@ -89,6 +93,8 @@ class LandController:
                 if add_expression(land, url):
                     urls_count += 1
             print('%s URLs created in land %s' % (urls_count, args.land))
+            return 1
+
 
     @staticmethod
     def delete(args: Namespace):
@@ -97,6 +103,8 @@ class LandController:
             land = Land.get(Land.name == args.name)
             land.delete_instance(recursive=True)
             print("Land %s deleted" % args.name)
+            return 1
+
 
     @staticmethod
     def crawl(args: Namespace):
@@ -107,6 +115,8 @@ class LandController:
             print('Land "%s" not found' % args.name)
         else:
             print("%d expressions processed" % crawl_land(land, fetch_limit))
+            return 1
+
 
     @staticmethod
     def export(args: Namespace):
@@ -122,14 +132,15 @@ class LandController:
             types = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf']
             if args.type in types:
                 export_land(land, args.type, minimum_relevance)
+                return 1
             else:
                 print('Invalid export type "%s" [%s]' % (args.type, ', '.join(types)))
-        print("Land export")
 
     @staticmethod
     def properties(args: Namespace):
         check_args(args, 'name')
         print("Land properties")
+        return 1
 
 
 class DomainController:
@@ -137,9 +148,11 @@ class DomainController:
     def crawl(args: Namespace):
         fetch_limit = get_arg_limit(args)
         print("%d domains processed" % crawl_domains(fetch_limit))
+        return 1
 
 
 class HeuristicController:
     @staticmethod
     def update(args: Namespace):
         update_heuristic()
+        return 1

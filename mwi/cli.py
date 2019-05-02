@@ -46,18 +46,13 @@ def dispatch(args):
     }
     controller = controllers.get(args.object)
     if controller:
-        try:
-            call(controller.get(args.verb), args)
-        except ValueError as e:
-            print(e)
-        except IntegrityError as e:
-            print(e)
+        return call(controller.get(args.verb), args)
     else:
         raise ValueError("Invalid object {}".format(args.object))
 
 
 def call(func, args):
     if callable(func):
-        func(args)
+        return func(args)
     else:
         raise ValueError("Invalid action call {} on object {}".format(args.verb, args.object))

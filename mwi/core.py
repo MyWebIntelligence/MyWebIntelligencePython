@@ -376,8 +376,8 @@ def get_export_select(export_type: str, land: Land, minimum_relevance: int):
     """
     fields = [Expression.id,
               Expression.url,
-              Expression.domain.id,
-              Expression.domain.name,
+              Domain.id.alias('domain_id'),
+              Domain.name.alias('domain_name'),
               Expression.http_status,
               Expression.title,
               Expression.lang,
@@ -402,7 +402,7 @@ def get_export_select(export_type: str, land: Land, minimum_relevance: int):
                   domain_select.alias('domain'),
                   fn.COUNT(SQL('*')).alias('relevance')]
 
-    select = Expression.select(*fields).where(Expression.land == land)
+    select = Expression.select(*fields).join(Domain).where(Expression.land == land)
 
     if minimum_relevance > 0:
         select = select.where(Expression.relevance >= minimum_relevance)
