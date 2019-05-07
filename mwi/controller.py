@@ -109,12 +109,17 @@ class LandController:
     @staticmethod
     def crawl(args: Namespace):
         check_args(args, 'name')
-        fetch_limit = get_arg_limit(args)
+        fetch_limit = get_arg_option('limit', args, typeof=int, default=0)
+        if fetch_limit > 0:
+            print('Fetch limit set to %s URLs' % fetch_limit)
+        http_status = get_arg_option('http', args, typeof=str, default=None)
+        if http_status is not None:
+            print('Limited to %s HTTP status code' % http_status)
         land = Land.get_or_none(Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
         else:
-            print("%d expressions processed" % crawl_land(land, fetch_limit))
+            print("%d expressions processed (%s errors)" % crawl_land(land, fetch_limit, http_status))
             return 1
 
 
@@ -146,8 +151,9 @@ class LandController:
 class DomainController:
     @staticmethod
     def crawl(args: Namespace):
-        fetch_limit = get_arg_limit(args)
-        print("%d domains processed" % crawl_domains(fetch_limit))
+        fetch_limit = get_arg_option('limit', args, typeof=int, default=0)
+        http_status = get_arg_option('http', args, typeof=str, default=None)
+        print("%d domains processed" % crawl_domains(fetch_limit, http_status))
         return 1
 
 

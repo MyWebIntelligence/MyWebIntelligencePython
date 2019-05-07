@@ -5,6 +5,11 @@ import argparse
 from .controller import *
 
 
+def command_run(args: dict):
+    args = Namespace(**args)
+    dispatch(args)
+
+
 def command_input():
     parser = argparse.ArgumentParser(description='MyWebIntelligence Command Line Project Manager.')
     parser.add_argument('object', metavar='object', type=str, help='Object to interact with [db, land, request]')
@@ -18,6 +23,7 @@ def command_input():
     parser.add_argument('--path', type=str, help='Path to local file containing URLs', nargs='?')
     parser.add_argument('--limit', type=int, help='Set limit of URLs to crawl', nargs='?', const=0)
     parser.add_argument('--minrel', type=int, help='Set minimum relevance threshold for exports', nargs='?', const=0)
+    parser.add_argument('--http', type=str, help='Limit crawling to specific http status (re crawling)', nargs='?')
     args = parser.parse_args()
     dispatch(args)
 

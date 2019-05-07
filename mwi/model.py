@@ -18,6 +18,7 @@ class Land(BaseModel):
 class Domain(BaseModel):
     schema = CharField()
     name = CharField()
+    http_status = CharField(max_length=3, null=True)
     title = TextField(null=True)
     description = TextField(null=True)
     keywords = TextField(null=True)

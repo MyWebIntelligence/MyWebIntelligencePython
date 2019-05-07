@@ -56,17 +56,23 @@ def split_arg(arg: str) -> list:
     return [a for a in args if a]
 
 
-def get_arg_limit(args: Namespace):
+def get_arg_option(name: str, args: Namespace, typeof, default):
     """
     Returns value from optional argument "limit"
+    :param name:
     :param args:
+    :param typeof:
+    :param default:
     :return:
     """
-    fetch_limit = 0
-    if (type(args.limit) is int) and (args.limit > 0):
-        fetch_limit = args.limit
-        print("Fetch limit set to %s" % fetch_limit)
-    return fetch_limit
+    args = vars(args)
+    if (name in args) and (args[name] is not None):
+        if default is not None:
+            value = default
+        value = typeof(args[name])
+        return value
+    else:
+        return default
 
 
 def stem_word(word: str) -> str:
@@ -80,19 +86,24 @@ def stem_word(word: str) -> str:
     return stem_word.stemmer.stem(word.lower())
 
 
-def crawl_domains(limit: int = 0):
+def crawl_domains(limit: int = 0, http: str = None):
     """
     Crawl domains to retrieve info
     :param limit:
     :return:
     """
-    domains = Domain.select().where(Domain.fetched_at.is_null())
+    domains = Domain.select()
     if limit > 0:
         domains = domains.limit(limit)
+    if http is not None:
+        domains = domains.where(Domain.http_status == http)
+    else:
+        domains = domains.where(Domain.fetched_at.is_null())
     processed = 0
     for domain in domains:
         try:
             r = requests.get("%s://%s" % (domain.schema, domain.name))
+            domain.http_status = r.status_code
             domain.fetched_at = datetime.datetime.now()
             if ('html' in r.headers['content-type']) and (r.status_code == 200):
                 process_domain_content(domain, r.text)
@@ -128,19 +139,25 @@ def get_meta_content(soup: BeautifulSoup, name: str):
     return tag['content'] if tag else ''
 
 
-def crawl_land(land: Land, limit: int = 0) -> int:
+def crawl_land(land: Land, limit: int = 0, http: str = None) -> tuple:
     """
     Start land crawl
     :param land:
     :param limit:
+    :param http:
     :return:
     """
-    expressions = Expression.select()\
-        .where((Expression.land == land) & Expression.fetched_at.is_null())\
-        .order_by(Expression.depth)
+    expressions = Expression.select()
     if limit > 0:
         expressions = expressions.limit(limit)
+    if http is not None:
+        expressions = expressions.where(Expression.land == land, Expression.http_status == http)
+    else:
+        expressions = expressions.where(Expression.land == land, Expression.fetched_at.is_null())
+    expressions = expressions.order_by(Expression.depth)
+
     processed = 0
+    errors = 0
     for expression in list(expressions):
         try:
             r = requests.get(expression.url)
@@ -149,12 +166,15 @@ def crawl_land(land: Land, limit: int = 0) -> int:
             if ('html' in r.headers['content-type']) and (r.status_code == 200):
                 process_expression_content(expression, r.text)
                 processed += 1
+            else:
+                errors += 1
         except Exception as e:
-            print(e)
             expression.http_status = '000'
             expression.fetched_at = datetime.datetime.now()
+            errors += 1
+            print(e)
         expression.save()
-    return processed
+    return processed, errors
 
 
 def add_expression(land: Land, url: str, depth=0) -> Expression:
@@ -313,7 +333,7 @@ def land_relevance(land: Land):
     :return:
     """
     words = get_land_dictionary(land)
-    select = Expression.select().where((Expression.land == land) and (Expression.readable.is_null(False)))
+    select = Expression.select().where(Expression.land == land, Expression.readable.is_null(False))
     row_count = select.count()
     if row_count > 0:
         print("Updating relevances for %d expressions, it may take some time." % row_count)
@@ -376,8 +396,8 @@ def get_export_select(export_type: str, land: Land, minimum_relevance: int):
     """
     fields = [Expression.id,
               Expression.url,
+              Domain,
               Domain.id.alias('domain_id'),
-              Domain.name.alias('domain_name'),
               Expression.http_status,
               Expression.title,
               Expression.lang,
@@ -390,19 +410,13 @@ def get_export_select(export_type: str, land: Land, minimum_relevance: int):
     if export_type.startswith('fullpage'):
         fields.append(Expression.readable)
     elif export_type.startswith('node'):
-        url_select = fn.REPLACE(Expression.url, 'https:', 'http:')
-        domain_select = fn.TRIM(
-            fn.REPLACE(
-                fn.REPLACE(url_select, fn.SUBSTR(url_select, fn.INSTR(fn.SUBSTR(url_select, 9), "/") + 9), ""),
-                "http:",
-                ""),
-            "/")
         fields = [Expression.id,
-                  domain_select.alias('url'),
-                  domain_select.alias('domain'),
+                  Domain,
+                  Domain.id.alias('domain_id'),
                   fn.COUNT(SQL('*')).alias('relevance')]
 
-    select = Expression.select(*fields).join(Domain).where(Expression.land == land)
+    predicate = Domain.schema.is_null(False) & (Expression.domain == Domain.id)
+    select = Expression.select(*fields).join(Domain, on=predicate).where(Expression.land == land)
 
     if minimum_relevance > 0:
         select = select.where(Expression.relevance >= minimum_relevance)
@@ -410,8 +424,8 @@ def get_export_select(export_type: str, land: Land, minimum_relevance: int):
         select = select.where(Expression.relevance.is_null(False))
 
     if export_type.startswith('node'):
-        select = select.group_by(SQL('domain'))
-
+        select = select.group_by(Domain.id)
+    print(select.sql())
     return select
 
 
@@ -444,22 +458,22 @@ def write_gexf(filename, select):
     links = {}
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     ns = {None: 'http://www.gexf.net/1.2draft', 'viz': 'http://www.gexf.net/1.1draft/viz'}
-    gexf = etree.Element('gexf', nsmap=ns, attrib={
-        'version': '1.2'})
-    etree.SubElement(gexf, 'meta', attrib={
-        'lastmodifieddate': date,
-        'creator': 'MyWebIntelligence'})
-    graph = etree.SubElement(gexf, 'graph', attrib={
-        'mode': 'static',
-        'defaultedgetype': 'directed'})
+    gexf = etree.Element('gexf', nsmap=ns, attrib={'version': '1.2'})
+    etree.SubElement(gexf, 'meta', attrib={'lastmodifieddate': date, 'creator': 'MyWebIntelligence'})
+    graph = etree.SubElement(gexf, 'graph', attrib={ 'mode': 'static', 'defaultedgetype': 'directed'})
+    attributes = etree.SubElement(graph, 'attributes', attrib={'class': 'node'})
+    etree.SubElement(attributes, 'attribute', attrib={'id': '0', 'title': 'domain_id', 'type': 'string'})
     nodes = etree.SubElement(graph, 'nodes')
     edges = etree.SubElement(graph, 'edges')
 
     for row in select:
+        url = row.url if row.url is not None else row.domain.name
         node = etree.SubElement(nodes, 'node', attrib={
             'id': str(row.id),
-            'label': row.url})
+            'label': url})
         etree.SubElement(node, '{%s}size' % ns['viz'], attrib={'value': str(row.relevance)})
+        attvalues = etree.SubElement(node, 'attvalues')
+        etree.SubElement(attvalues, 'attvalue', attrib={'for': '0', 'value': str(row.domain_id)})
         links[row.id] = []
 
         for link in row.links_to:
