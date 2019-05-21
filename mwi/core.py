@@ -1,18 +1,17 @@
 """
 Core functions
 """
-from argparse import Namespace
+from .model import *
+from .export import Export
+import settings
 import re
-import csv
-from lxml import etree
+import requests
+from argparse import Namespace
 from urllib.parse import urlparse
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.stem.snowball import FrenchStemmer
-import requests
 from bs4 import BeautifulSoup
-from .model import *
-import settings
 
 
 try:
@@ -90,6 +89,7 @@ def crawl_domains(limit: int = 0, http: str = None):
     """
     Crawl domains to retrieve info
     :param limit:
+    :param http:
     :return:
     """
     domains = Domain.select()
@@ -102,7 +102,10 @@ def crawl_domains(limit: int = 0, http: str = None):
     processed = 0
     for domain in domains:
         try:
-            r = requests.get("%s://%s" % (domain.schema, domain.name))
+            try:
+                r = requests.get("https://%s" % domain.name, timeout=5)
+            except Exception as e:
+                r = requests.get("http://%s" % domain.name, timeout=5)
             domain.http_status = r.status_code
             domain.fetched_at = datetime.datetime.now()
             if ('html' in r.headers['content-type']) and (r.status_code == 200):
@@ -160,7 +163,7 @@ def crawl_land(land: Land, limit: int = 0, http: str = None) -> tuple:
     errors = 0
     for expression in list(expressions):
         try:
-            r = requests.get(expression.url)
+            r = requests.get(expression.url, timeout=5)
             expression.http_status = r.status_code
             expression.fetched_at = datetime.datetime.now()
             if ('html' in r.headers['content-type']) and (r.status_code == 200):
@@ -188,7 +191,7 @@ def add_expression(land: Land, url: str, depth=0) -> Expression:
     url = remove_anchor(url)
     if is_crawlable(url):
         domain_name = get_domain_name(url)
-        domain = Domain.get_or_create(schema=url[:url.find(':')], name=domain_name)[0]
+        domain = Domain.get_or_create(name=domain_name)[0]
         expression = Expression.get_or_none(Expression.url == url)
         if expression is None:
             expression = Expression.create(land=land, domain=domain, url=url, depth=depth)
@@ -271,18 +274,20 @@ def process_expression_content(expression: Expression, html: str) -> Expression:
     soup = BeautifulSoup(html, 'html.parser')
     words = get_land_dictionary(expression.land)
 
+    expression.lang = soup.html.get('lang', '')
     expression.title = soup.title.string.strip()
+    expression.description = get_meta_content(soup, 'description')
+    expression.keywords = get_meta_content(soup, 'keywords')
 
     clean_html(soup)
-    expression.lang = soup.html.get('lang', '')
     with open('data/lands/%s/%s' % (expression.land.get_id(), expression.get_id()), 'w') as html_file:
         html_file.write(html.strip())
+
     expression.readable = get_readable(soup)
-    # expression.published_at
     expression.relevance = expression_relevance(words, expression)
+
     if expression.relevance > 0:
         expression.approved_at = datetime.datetime.now()
-
         if expression.depth < 3:
             urls = [a.get('href') for a in soup.find_all('a') if is_crawlable(a.get('href'))]
             for url in urls:
@@ -367,127 +372,14 @@ def export_land(land: Land, export_type: str, minimum_relevance: int):
     :param minimum_relevance:
     :return:
     """
-    extension, call_export = None, None
-    select = get_export_select(export_type, land, minimum_relevance)
-
-    if export_type.endswith('csv'):
-        extension = 'csv'
-        call_export = write_csv
-    elif export_type.endswith('gexf'):
-        extension = 'gexf'
-        call_export = write_gexf
-
-    if (select is not None) and (select.count() > 0):
-        date_tag = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = 'data/export_%s_%s_%s.%s' % (land.name, export_type, date_tag, extension)
-        call_export(filename, select)
-        print("Successfully exported %s records to %s" % (select.count(), filename))
+    date_tag = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = 'data/export_%s_%s_%s' % (land.name, export_type, date_tag)
+    export = Export(export_type, land, minimum_relevance)
+    count = export.write(export_type, filename)
+    if count > 0:
+        print("Successfully exported %s records to %s" % (count, filename))
     else:
         print("No records to export, check crawling state or lower minimum relevance threshold")
-
-
-def get_export_select(export_type: str, land: Land, minimum_relevance: int):
-    """
-    Get ModelSelect for export task
-    :param export_type:
-    :param land:
-    :param minimum_relevance:
-    :return:
-    """
-    fields = [Expression.id,
-              Expression.url,
-              Domain,
-              Domain.id.alias('domain_id'),
-              Expression.http_status,
-              Expression.title,
-              Expression.lang,
-              Expression.created_at,
-              Expression.fetched_at,
-              Expression.approved_at,
-              Expression.relevance,
-              Expression.depth]
-
-    if export_type.startswith('fullpage'):
-        fields.append(Expression.readable)
-    elif export_type.startswith('node'):
-        fields = [Expression.id,
-                  Domain,
-                  Domain.id.alias('domain_id'),
-                  fn.COUNT(SQL('*')).alias('relevance')]
-
-    predicate = Domain.schema.is_null(False) & (Expression.domain == Domain.id)
-    select = Expression.select(*fields).join(Domain, on=predicate).where(Expression.land == land)
-
-    if minimum_relevance > 0:
-        select = select.where(Expression.relevance >= minimum_relevance)
-    else:
-        select = select.where(Expression.relevance.is_null(False))
-
-    if export_type.startswith('node'):
-        select = select.group_by(Domain.id)
-    print(select.sql())
-    return select
-
-
-def write_csv(filename, select):
-    """
-    Write CSV file
-    :param filename:
-    :param select:
-    :return:
-    """
-    with open(filename, 'w', newline='\n') as file:
-        writer = csv.writer(file, quoting=csv.QUOTE_ALL)
-        headers = None
-        for row in select:
-            if headers is None:
-                headers = tuple(row.__dict__['__data__'].keys())
-                writer.writerow(headers)
-            writer.writerow([str(getattr(row, f)) for f in headers])
-    file.close()
-
-
-def write_gexf(filename, select):
-    """
-    Write GEXF file
-    @todo node size factor ?
-    :param filename:
-    :param select:
-    :return:
-    """
-    links = {}
-    date = datetime.datetime.now().strftime("%Y-%m-%d")
-    ns = {None: 'http://www.gexf.net/1.2draft', 'viz': 'http://www.gexf.net/1.1draft/viz'}
-    gexf = etree.Element('gexf', nsmap=ns, attrib={'version': '1.2'})
-    etree.SubElement(gexf, 'meta', attrib={'lastmodifieddate': date, 'creator': 'MyWebIntelligence'})
-    graph = etree.SubElement(gexf, 'graph', attrib={ 'mode': 'static', 'defaultedgetype': 'directed'})
-    attributes = etree.SubElement(graph, 'attributes', attrib={'class': 'node'})
-    etree.SubElement(attributes, 'attribute', attrib={'id': '0', 'title': 'domain_id', 'type': 'string'})
-    nodes = etree.SubElement(graph, 'nodes')
-    edges = etree.SubElement(graph, 'edges')
-
-    for row in select:
-        url = row.url if row.url is not None else row.domain.name
-        node = etree.SubElement(nodes, 'node', attrib={
-            'id': str(row.id),
-            'label': url})
-        etree.SubElement(node, '{%s}size' % ns['viz'], attrib={'value': str(row.relevance)})
-        attvalues = etree.SubElement(node, 'attvalues')
-        etree.SubElement(attvalues, 'attvalue', attrib={'for': '0', 'value': str(row.domain_id)})
-        links[row.id] = []
-
-        for link in row.links_to:
-            links[row.id].append(link.target_id)
-
-    for source, targets in links.items():
-        for target in [x for x in targets if x in links]:
-            etree.SubElement(edges, 'edge', attrib={
-                'id': "%s_%s" % (source, target),
-                'source': str(source),
-                'target': str(target)})
-
-    tree = etree.ElementTree(gexf)
-    tree.write(filename, xml_declaration=True, pretty_print=True, encoding='utf-8')
 
 
 def update_heuristic():

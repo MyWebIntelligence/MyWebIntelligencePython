@@ -16,7 +16,6 @@ class Land(BaseModel):
 
 
 class Domain(BaseModel):
-    schema = CharField()
     name = CharField()
     http_status = CharField(max_length=3, null=True)
     title = TextField(null=True)
@@ -25,19 +24,16 @@ class Domain(BaseModel):
     created_at = DateTimeField(default=datetime.datetime.now)
     fetched_at = DateTimeField(null=True)
 
-    class Meta:
-        indexes = (
-            (('schema', 'name'), True),
-        )
-
 
 class Expression(BaseModel):
     land = ForeignKeyField(Land, backref='expressions', on_delete='CASCADE')
     url = TextField()
     domain = ForeignKeyField(Domain, backref='expressions')
     http_status = CharField(max_length=3, null=True)
-    title = CharField(null=True)
     lang = CharField(max_length=10, null=True)
+    title = CharField(null=True)
+    description = TextField(null=True)
+    keywords = TextField(null=True)
     readable = TextField(null=True)
     created_at = DateTimeField(default=datetime.datetime.now)
     published_at = DateTimeField(null=True)

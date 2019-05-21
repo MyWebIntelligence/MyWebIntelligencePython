@@ -134,12 +134,11 @@ class LandController:
         if land is None:
             print('Land "%s" not found' % args.name)
         else:
-            types = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf']
-            if args.type in types:
+            if args.type in Export.types:
                 export_land(land, args.type, minimum_relevance)
                 return 1
             else:
-                print('Invalid export type "%s" [%s]' % (args.type, ', '.join(types)))
+                print('Invalid export type "%s" [%s]' % (args.type, ', '.join(Export.types)))
 
     @staticmethod
     def properties(args: Namespace):
