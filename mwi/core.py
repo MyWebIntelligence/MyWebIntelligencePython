@@ -47,12 +47,12 @@ def check_args(args: Namespace, mandatory) -> bool:
 
 def split_arg(arg: str) -> list:
     """
-    Splits arg string using [, ] separators and returns a filtered list
+    Splits arg string using comma separator and returns a filtered list
     :param arg:
     :return:
     """
-    args = re.split('[, ]', arg)
-    return [a for a in args if a]
+    args = arg.split(",")
+    return [a.strip() for a in args if a]
 
 
 def get_arg_option(name: str, args: Namespace, typeof, default):
@@ -103,9 +103,9 @@ def crawl_domains(limit: int = 0, http: str = None):
     for domain in domains:
         try:
             try:
-                r = requests.get("https://%s" % domain.name, timeout=5)
+                r = requests.get("https://%s" % domain.name, headers={"User-Agent": settings.user_agent}, timeout=5)
             except Exception as e:
-                r = requests.get("http://%s" % domain.name, timeout=5)
+                r = requests.get("http://%s" % domain.name, headers={"User-Agent": settings.user_agent}, timeout=5)
             domain.http_status = r.status_code
             domain.fetched_at = datetime.datetime.now()
             if ('html' in r.headers['content-type']) and (r.status_code == 200):
@@ -163,7 +163,7 @@ def crawl_land(land: Land, limit: int = 0, http: str = None) -> tuple:
     errors = 0
     for expression in list(expressions):
         try:
-            r = requests.get(expression.url, timeout=5)
+            r = requests.get(expression.url, headers={"User-Agent": settings.user_agent}, timeout=5)
             expression.http_status = r.status_code
             expression.fetched_at = datetime.datetime.now()
             if ('html' in r.headers['content-type']) and (r.status_code == 200):
@@ -280,8 +280,12 @@ def process_expression_content(expression: Expression, html: str) -> Expression:
     expression.keywords = get_meta_content(soup, 'keywords')
 
     clean_html(soup)
+
     with open('data/lands/%s/%s' % (expression.land.get_id(), expression.get_id()), 'w') as html_file:
         html_file.write(html.strip())
+    html_file.close()
+
+    extract_medias(soup, expression)
 
     expression.readable = get_readable(soup)
     expression.relevance = expression_relevance(words, expression)
@@ -294,6 +298,28 @@ def process_expression_content(expression: Expression, html: str) -> Expression:
                 link_expression(expression.land, expression, url)
 
     return expression
+
+
+def extract_medias(content, expression):
+    """
+    Extract media src (img, video) from html content
+    :param content:
+    :param expression:
+    :return:
+    """
+    medias = []
+    for tag in ['img', 'video', 'audio']:
+        for t in content.find_all(tag):
+            src = t.get('src')
+            is_valid_src = src is not None and src not in medias
+            if tag == 'img':
+                is_valid_src = is_valid_src and src.endswith(".jpg")
+            if is_valid_src:
+                if src.startswith("/"):
+                    src = expression.url[:expression.url.find("/", 9) + 1].strip('/') + src
+                print("Linking media")
+                media = Media.create(expression=expression, url=src, type=tag)
+                media.save()
 
 
 def get_readable(content):

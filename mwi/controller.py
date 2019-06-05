@@ -5,6 +5,7 @@ import os
 from .core import *
 from .model import *
 
+
 class DbController:
     @staticmethod
     def setup(args: Namespace):
@@ -74,7 +75,6 @@ class LandController:
             land_relevance(land)
             return 1
 
-
     @staticmethod
     def addurl(args: Namespace):
         check_args(args, 'land')
@@ -95,7 +95,6 @@ class LandController:
             print('%s URLs created in land %s' % (urls_count, args.land))
             return 1
 
-
     @staticmethod
     def delete(args: Namespace):
         check_args(args, 'name')
@@ -104,7 +103,6 @@ class LandController:
             land.delete_instance(recursive=True)
             print("Land %s deleted" % args.name)
             return 1
-
 
     @staticmethod
     def crawl(args: Namespace):
@@ -121,7 +119,6 @@ class LandController:
         else:
             print("%d expressions processed (%s errors)" % crawl_land(land, fetch_limit, http_status))
             return 1
-
 
     @staticmethod
     def export(args: Namespace):

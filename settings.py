@@ -1,3 +1,5 @@
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36"
+
 heuristics = {
     "facebook.com": r"([a-z0-9\-_]+\.facebook\.com/(?!(?:permalink.php)|(?:notes))[a-zA-Z0-9\.\-_]+)/?\??",
     "twitter.com": r"([a-z0-9\-_]+\.twitter\.com/[a-zA-Z0-9\.\-_]+)/?\??",

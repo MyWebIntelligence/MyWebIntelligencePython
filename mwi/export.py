@@ -172,7 +172,10 @@ class Export:
             FROM expressionlink AS link
             JOIN expression AS e1 ON e1.id = link.source_id
             JOIN expression AS e2 ON e2.id = link.target_id
-            WHERE source_id IN idx AND target_id IN idx
+            WHERE
+                source_id IN idx
+                AND target_id IN idx
+                AND source_domain_id != target_domain_id
         """
         cursor = DB.execute_sql(sql, (self.land.get_id(), self.relevance))
         keys = ['source_id', 'source_domain_id', 'target_id', 'target_domain_id', 'weight']
@@ -227,7 +230,10 @@ class Export:
             FROM expressionlink AS link
             JOIN expression AS e1 ON e1.id = link.source_id
             JOIN expression AS e2 ON e2.id = link.target_id
-            WHERE source_id IN idx AND target_id IN idx
+            WHERE
+                source_id IN idx
+                AND target_id IN idx
+                AND source_domain_id != target_domain_id
             GROUP BY source_domain_id, target_domain_id
         """
         cursor = DB.execute_sql(sql, (self.land.get_id(), self.relevance))

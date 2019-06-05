@@ -55,7 +55,7 @@ $ venv/bin/python mywi.py land list
 
 ## Add terms to land
 
-Terms argument is a quoted list of words, space or comma separated `--terms="asthma, asthmatic"`
+Terms argument is a quoted list of comma separated words `--terms="asthma, asthmatic, William Turner"`
 
 ```bash
 $ venv/bin/python mywi.py land addterm --land=LAND_NAME --terms=TERMS
