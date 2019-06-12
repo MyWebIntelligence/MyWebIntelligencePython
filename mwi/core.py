@@ -206,7 +206,8 @@ def get_domain_name(url: str) -> str:
     :param url:
     :return:
     """
-    domain_name = re.sub('^https?://', '', url[:url.find("/", 9) + 1]).strip('/')
+    parsed = urlparse(url)
+    domain_name = parsed.netloc
     for k, v in settings.heuristics.items():
         if domain_name.endswith(k):
             matches = re.findall(v, url)
@@ -420,8 +421,8 @@ def update_heuristic():
     for expression in expressions:
         domain = get_domain_name(expression.url)
         if domain != domains[expression.domain_id]['name']:
-            domain_to_update = Domain.get_by_id(expression.domain_id)
-            domain_to_update.name = domain
-            domain_to_update.save()
+            to_domain, is_created = Domain.get_or_create(name=domain)
+            expression.domain = to_domain
+            expression.save()
             updated += 1
     print("%d domain(s) updated" % updated)
