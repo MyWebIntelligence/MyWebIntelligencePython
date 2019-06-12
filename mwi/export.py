@@ -7,7 +7,7 @@ from lxml import etree
 class Export:
 
     gexf_ns = {None: 'http://www.gexf.net/1.2draft', 'viz': 'http://www.gexf.net/1.1draft/viz'}
-    types = ['pagecsv', 'fullpagecsv', 'nodecsv', 'pagegexf', 'nodegexf']
+    types = ['pagecsv', 'fullpagecsv', 'nodecsv', 'pagegexf', 'nodegexf', 'mediacsv']
     type = None
     land = None
     relevance = 1
@@ -84,7 +84,7 @@ class Export:
             WHERE land_id = ? AND relevance >= ?
         """
         cursor = DB.execute_sql(sql, (self.land.get_id(), self.relevance))
-        keys = ['id', 'url', 'title', 'description', 'keywords', 'relevance', 'depth', 'readable',
+        keys = ['id', 'url', 'title', 'description', 'keywords', 'readable', 'relevance', 'depth',
                 'domain_id', 'domain_name', 'domain_description', 'domain_keywords']
         return self.write_csv(filename, keys, cursor)
 
@@ -98,6 +98,7 @@ class Export:
             SELECT
                 d.id,
                 d.name,
+                d.title,
                 d.description,
                 d.keywords,
                 COUNT(*) AS expressions,
@@ -108,7 +109,28 @@ class Export:
             GROUP BY d.id
         """
         cursor = DB.execute_sql(sql, (self.land.get_id(), self.relevance))
-        keys = ['id', 'name', 'description', 'keywords', 'expressions', 'average_relevance']
+        keys = ['id', 'name', 'title', 'description', 'keywords', 'expressions', 'average_relevance']
+        return self.write_csv(filename, keys, cursor)
+
+    def write_mediacsv(self, filename) -> int:
+        """
+        Write CSV file
+        :param filename:
+        :return:
+        """
+        sql = """
+            SELECT
+                m.id,
+                m.expression_id,
+                m.url,
+                m.type
+            FROM media AS m
+            JOIN expression AS e ON e.id = m.expression_id
+            WHERE e.land_id = ? AND e.relevance >= ?
+            GROUP BY m.id
+        """
+        cursor = DB.execute_sql(sql, (self.land.get_id(), self.relevance))
+        keys = ['id', 'expression_id', 'url', 'type']
         return self.write_csv(filename, keys, cursor)
 
     @staticmethod
@@ -143,6 +165,7 @@ class Export:
                 e.depth,
                 e.domain_id,
                 d.name AS domain_name,
+                d.title AS domain_title,
                 d.description AS domain_description,
                 d.keywords AS domain_keywords
             FROM expression AS e
@@ -151,7 +174,7 @@ class Export:
         """
         cursor = DB.execute_sql(sql, (self.land.get_id(), self.relevance))
         keys = ['id', 'url', 'title', 'description', 'keywords', 'relevance', 'depth', 'domain_id',
-                'domain_name', 'domain_description', 'domain_keywords']
+                'domain_name', 'domain_title', 'domain_description', 'domain_keywords']
 
         for row in cursor:
             self.gexf_node(dict(zip(keys, row)), nodes, attributes, 'url', 'relevance')
@@ -198,6 +221,7 @@ class Export:
             SELECT
                 d.id,
                 d.name,
+                d.title,
                 d.description,
                 d.keywords,
                 COUNT(*) AS expressions,
@@ -208,7 +232,7 @@ class Export:
             GROUP BY d.name
         """
         cursor = DB.execute_sql(sql, (self.land.get_id(), self.relevance))
-        keys = ['id', 'name', 'description', 'keywords', 'expressions', 'average_relevance']
+        keys = ['id', 'name', 'title', 'description', 'keywords', 'expressions', 'average_relevance']
 
         for row in cursor:
             self.gexf_node(dict(zip(keys, row)), nodes, attributes, 'name', 'average_relevance')
