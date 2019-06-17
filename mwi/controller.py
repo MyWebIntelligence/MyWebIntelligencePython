@@ -2,159 +2,238 @@
 Application controller
 """
 import os
-from .core import *
-from .model import *
+from peewee import JOIN, fn
+from . import core
+from . import model
 
 
 class DbController:
+    """
+    Db controller class
+    """
+
     @staticmethod
-    def setup(args: Namespace):
+    def setup(args: core.Namespace):
         """
         Creates database model, this is a destructive action as tables are dropped before creation
         :param args:
         :return:
         """
-        if confirm("Warning, existing data will be lost, type 'Y' to proceed : "):
-            tables = [Land, Domain, Expression, ExpressionLink, Word, LandDictionary, Media]
-            DB.drop_tables(tables)
-            DB.create_tables(tables)
+        if core.confirm("Warning, existing data will be lost, type 'Y' to proceed : "):
+            tables = [model.Land, model.Domain, model.Expression, model.ExpressionLink,
+                      model.Word, model.LandDictionary, model.Media]
+            model.DB.drop_tables(tables)
+            model.DB.create_tables(tables)
             print("Model created, setup complete")
             return 1
-        else:
-            print("Database setup aborted")
+        print("Database setup aborted")
+        return 0
 
 
 class LandController:
+    """
+    Land controller class
+    """
+
     @staticmethod
-    def list(args: Namespace):
+    def list(args: core.Namespace):
         """
         Lists some information about existing lands
         :param args:
         :return:
         """
-        lands = Land.select().join(LandDictionary, JOIN.LEFT_OUTER).join(Word, JOIN.LEFT_OUTER)\
-            .switch(Land).join(Expression, JOIN.LEFT_OUTER).group_by(Land.name).order_by(Land.name)
+        lands = model.Land.select()\
+            .join(model.LandDictionary, JOIN.LEFT_OUTER)\
+            .join(model.Word, JOIN.LEFT_OUTER)\
+            .switch(model.Land)\
+            .join(model.Expression, JOIN.LEFT_OUTER)\
+            .group_by(model.Land.name)\
+            .order_by(model.Land.name)
         if lands.count() > 0:
             for land in lands:
-                exp_stats = Expression.select(fn.COUNT(Expression.id).alias('num'))\
-                    .join(Land)\
-                    .where((Expression.land == land) & (Expression.fetched_at.is_null()))
+                exp_stats = model.Expression\
+                    .select(fn.COUNT(model.Expression.id).alias('num'))\
+                    .join(model.Land)\
+                    .where((model.Expression.land == land)
+                           & (model.Expression.fetched_at.is_null()))
                 to_crawl = [s.num for s in exp_stats]
-                print("%s - (%s)\n\t%s" % (land.name, land.created_at.strftime("%B %d %Y %H:%M"), land.description))
-                print("\t%s terms in land dictionary %s" % (land.words.count(), [d.word.term for d in land.words]))
-                print("\t%s expressions in land (%s remaining to crawl)" % (land.expressions.count(), to_crawl[0]))
+                print("%s - (%s)\n\t%s" % (
+                    land.name,
+                    land.created_at.strftime("%B %d %Y %H:%M"),
+                    land.description))
+                print("\t%s terms in land dictionary %s" % (
+                    land.words.count(),
+                    [d.word.term for d in land.words]))
+                print("\t%s expressions in land (%s remaining to crawl)" % (
+                    land.expressions.count(),
+                    to_crawl[0]))
             return 1
-        else:
-            print("No land created")
+        print("No land created")
+        return 0
 
     @staticmethod
-    def create(args: Namespace):
+    def create(args: core.Namespace):
         """
         Creates land
         :param args:
         :return:
         """
-        check_args(args, ('name', 'desc'))
-        land = Land.create(name=args.name, description=args.desc)
+        core.check_args(args, ('name', 'desc'))
+        land = model.Land.create(name=args.name, description=args.desc)
         os.makedirs('data/lands/%s' % land.get_id(), exist_ok=True)
         print('Land "%s" created' % args.name)
         return 1
 
     @staticmethod
-    def addterm(args: Namespace):
-        check_args(args, ('land', 'terms'))
-        land = Land.get_or_none(Land.name == args.land)
+    def addterm(args: core.Namespace):
+        """
+        Add terms to land dictionary
+        :param args:
+        :return:
+        """
+        core.check_args(args, ('land', 'terms'))
+        land = model.Land.get_or_none(model.Land.name == args.land)
         if land is None:
             print('Land "%s" not found' % args.land)
         else:
-            for term in split_arg(args.terms):
-                with DB.atomic():
-                    word, _ = Word.get_or_create(term=term, lemma=stem_word(term))
-                    LandDictionary.create(land=land.get_id(), word=word.get_id())
+            for term in core.split_arg(args.terms):
+                with model.DB.atomic():
+                    word, _ = model.Word.get_or_create(term=term, lemma=core.stem_word(term))
+                    model.LandDictionary.create(land=land.get_id(), word=word.get_id())
                     print('Term "%s" created in land %s' % (term, args.land))
-            land_relevance(land)
+            core.land_relevance(land)
             return 1
+        return 0
 
     @staticmethod
-    def addurl(args: Namespace):
-        check_args(args, 'land')
-        land = Land.get_or_none(Land.name == args.land)
+    def addurl(args: core.Namespace):
+        """
+        Add URLs to land
+        :param args:
+        :return:
+        """
+        core.check_args(args, 'land')
+        land = model.Land.get_or_none(model.Land.name == args.land)
         if land is None:
             print('Land "%s" not found' % args.land)
         else:
             urls_count = 0
             urls = []
             if args.urls:
-                urls += [url for url in split_arg(args.urls)]
+                urls += [url for url in core.split_arg(args.urls)]
             if args.path:
                 with open(args.path, 'r', encoding='utf-8') as file:
                     urls += file.read().splitlines()
             for url in urls:
-                if add_expression(land, url):
+                if core.add_expression(land, url):
                     urls_count += 1
             print('%s URLs created in land %s' % (urls_count, args.land))
             return 1
+        return 0
 
     @staticmethod
-    def delete(args: Namespace):
-        check_args(args, 'name')
-        if confirm("Land and underlying objects will be deleted, type 'Y' to proceed : "):
-            land = Land.get(Land.name == args.name)
+    def delete(args: core.Namespace):
+        """
+        Delete land
+        :param args:
+        :return:
+        """
+        core.check_args(args, 'name')
+        if core.confirm("Land and underlying objects will be deleted, type 'Y' to proceed : "):
+            land = model.Land.get(model.Land.name == args.name)
             land.delete_instance(recursive=True)
             print("Land %s deleted" % args.name)
             return 1
+        return 0
 
     @staticmethod
-    def crawl(args: Namespace):
-        check_args(args, 'name')
-        fetch_limit = get_arg_option('limit', args, typeof=int, default=0)
+    def crawl(args: core.Namespace):
+        """
+        Crawl land
+        :param args:
+        :return:
+        """
+        core.check_args(args, 'name')
+        fetch_limit = core.get_arg_option('limit', args, set_type=int, default=0)
         if fetch_limit > 0:
             print('Fetch limit set to %s URLs' % fetch_limit)
-        http_status = get_arg_option('http', args, typeof=str, default=None)
+        http_status = core.get_arg_option('http', args, set_type=str, default=None)
         if http_status is not None:
             print('Limited to %s HTTP status code' % http_status)
-        land = Land.get_or_none(Land.name == args.name)
+        land = model.Land.get_or_none(model.Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
         else:
-            print("%d expressions processed (%s errors)" % crawl_land(land, fetch_limit, http_status))
+            print("%d expressions processed (%s errors)" % core.crawl_land(
+                land,
+                fetch_limit,
+                http_status))
             return 1
+        return 0
 
     @staticmethod
-    def export(args: Namespace):
+    def export(args: core.Namespace):
+        """
+        Export land
+        :param args:
+        :return:
+        """
         minimum_relevance = 1
-        check_args(args, ('name', 'type'))
-        if (type(args.minrel) is int) and (args.minrel >= 0):
+        core.check_args(args, ('name', 'type'))
+        if isinstance(args.minrel, int) and (args.minrel >= 0):
             minimum_relevance = args.minrel
             print("Minimum relevance set to %s" % minimum_relevance)
-        land = Land.get_or_none(Land.name == args.name)
+        land = model.Land.get_or_none(model.Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
         else:
-            if args.type in Export.types:
-                export_land(land, args.type, minimum_relevance)
+            if args.type in core.Export.types:
+                core.export_land(land, args.type, minimum_relevance)
                 return 1
-            else:
-                print('Invalid export type "%s" [%s]' % (args.type, ', '.join(Export.types)))
+            print('Invalid export type "%s" [%s]' % (args.type, ', '.join(core.Export.types)))
+        return 0
 
     @staticmethod
-    def properties(args: Namespace):
-        check_args(args, 'name')
+    def properties(args: core.Namespace):
+        """
+        Land properties
+        :param args:
+        :return:
+        """
+        core.check_args(args, 'name')
         print("Land properties")
         return 1
 
 
 class DomainController:
+    """
+    Domain controller class
+    """
+
     @staticmethod
-    def crawl(args: Namespace):
-        fetch_limit = get_arg_option('limit', args, typeof=int, default=0)
-        http_status = get_arg_option('http', args, typeof=str, default=None)
-        print("%d domains processed" % crawl_domains(fetch_limit, http_status))
+    def crawl(args: core.Namespace):
+        """
+        Crawl domains
+        :param args:
+        :return:
+        """
+        fetch_limit = core.get_arg_option('limit', args, set_type=int, default=0)
+        http_status = core.get_arg_option('http', args, set_type=str, default=None)
+        print("%d domains processed" % core.crawl_domains(fetch_limit, http_status))
         return 1
 
 
 class HeuristicController:
+    """
+    Heuristic controller class
+    """
+
     @staticmethod
-    def update(args: Namespace):
-        update_heuristic()
+    def update(args: core.Namespace):
+        """
+        Update domains from specified heuristics
+        :param args:
+        :return:
+        """
+        core.update_heuristic()
         return 1

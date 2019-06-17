@@ -1,21 +1,38 @@
-from peewee import *
+"""
+Model definition
+"""
+
 import datetime
+from peewee import SqliteDatabase, Model, CharField, TextField, \
+    DateTimeField, ForeignKeyField, IntegerField, CompositeKey
 
 DB = SqliteDatabase('data/mwi.db')
 
 
 class BaseModel(Model):
+    """
+    BaseModel
+    """
     class Meta:
+        """
+        Meta class to set DB
+        """
         database = DB
 
 
 class Land(BaseModel):
+    """
+    Land model
+    """
     name = CharField(unique=True)
     description = TextField()
     created_at = DateTimeField(default=datetime.datetime.now)
 
 
 class Domain(BaseModel):
+    """
+    Domain model
+    """
     name = CharField()
     http_status = CharField(max_length=3, null=True)
     title = TextField(null=True)
@@ -26,6 +43,9 @@ class Domain(BaseModel):
 
 
 class Expression(BaseModel):
+    """
+    Expression model
+    """
     land = ForeignKeyField(Land, backref='expressions', on_delete='CASCADE')
     url = TextField()
     domain = ForeignKeyField(Domain, backref='expressions')
@@ -44,25 +64,43 @@ class Expression(BaseModel):
 
 
 class ExpressionLink(BaseModel):
+    """
+    ExpressionLink model
+    """
     class Meta:
+        """
+        Meta class to set composite primary key
+        """
         primary_key = CompositeKey('source', 'target')
     source = ForeignKeyField(Expression, backref='links_to', on_delete='CASCADE')
     target = ForeignKeyField(Expression, backref='linked_by', on_delete='CASCADE')
 
 
 class Word(BaseModel):
+    """
+    Word model
+    """
     term = CharField(max_length=30)
     lemma = CharField(max_length=30)
 
 
 class LandDictionary(BaseModel):
+    """
+    LandDictionary model
+    """
     class Meta:
+        """
+        Meta class to set composite primary key
+        """
         primary_key = CompositeKey('land', 'word')
     land = ForeignKeyField(Land, backref='words', on_delete='CASCADE')
     word = ForeignKeyField(Word, backref='lands', on_delete='CASCADE')
 
 
 class Media(BaseModel):
+    """
+    Media model
+    """
     expression = ForeignKeyField(Expression, backref='medias', on_delete='CASCADE')
     url = TextField()
     type = CharField(max_length=30)

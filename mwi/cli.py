@@ -2,33 +2,80 @@
 Command Line Interface
 """
 import argparse
-from .controller import *
+from .controller import DbController, DomainController, LandController, HeuristicController
 
 
 def command_run(args: dict):
-    args = Namespace(**args)
+    """
+    Run command from args dict
+    :param args:
+    :return:
+    """
+    args = argparse.Namespace(**args)
     dispatch(args)
 
 
 def command_input():
+    """
+    Run command from input
+    :return:
+    """
     parser = argparse.ArgumentParser(description='MyWebIntelligence Command Line Project Manager.')
-    parser.add_argument('object', metavar='object', type=str, help='Object to interact with [db, land, request]')
-    parser.add_argument('verb', metavar='verb', type=str, help='Verb depending on target object')
-    parser.add_argument('--land', type=str, help='Name of the land to work with')
-    parser.add_argument('--name', type=str, help='Name of the object')
-    parser.add_argument('--desc', type=str, help='Description of the object')
-    parser.add_argument('--type', type=str, help='Export type [pagecsv, pagegexf, fullpagecsv, nodecsv, nodegexf]')
-    parser.add_argument('--terms', type=str, help='Terms to add to request dictionnary, comma separated')
-    parser.add_argument('--urls', type=str, help='URL to add to request, comma separated', nargs='?')
-    parser.add_argument('--path', type=str, help='Path to local file containing URLs', nargs='?')
-    parser.add_argument('--limit', type=int, help='Set limit of URLs to crawl', nargs='?', const=0)
-    parser.add_argument('--minrel', type=int, help='Set minimum relevance threshold for exports', nargs='?', const=0)
-    parser.add_argument('--http', type=str, help='Limit crawling to specific http status (re crawling)', nargs='?')
+    parser.add_argument('object',
+                        metavar='object',
+                        type=str,
+                        help='Object to interact with [db, land, request]')
+    parser.add_argument('verb',
+                        metavar='verb',
+                        type=str,
+                        help='Verb depending on target object')
+    parser.add_argument('--land',
+                        type=str,
+                        help='Name of the land to work with')
+    parser.add_argument('--name',
+                        type=str,
+                        help='Name of the object')
+    parser.add_argument('--desc',
+                        type=str,
+                        help='Description of the object')
+    parser.add_argument('--type',
+                        type=str,
+                        help='Export type [pagecsv, pagegexf, fullpagecsv, nodecsv, nodegexf]')
+    parser.add_argument('--terms',
+                        type=str,
+                        help='Terms to add to request dictionnary, comma separated')
+    parser.add_argument('--urls',
+                        type=str,
+                        help='URL to add to request, comma separated',
+                        nargs='?')
+    parser.add_argument('--path',
+                        type=str,
+                        help='Path to local file containing URLs',
+                        nargs='?')
+    parser.add_argument('--limit',
+                        type=int,
+                        help='Set limit of URLs to crawl',
+                        nargs='?',
+                        const=0)
+    parser.add_argument('--minrel',
+                        type=int,
+                        help='Set minimum relevance threshold for exports',
+                        nargs='?',
+                        const=0)
+    parser.add_argument('--http',
+                        type=str,
+                        help='Limit crawling to specific http status (re crawling)',
+                        nargs='?')
     args = parser.parse_args()
     dispatch(args)
 
 
 def dispatch(args):
+    """
+    Disptach command to application controller
+    :param args:
+    :return:
+    """
     controllers = {
         'db': {
             'setup': DbController.setup
@@ -53,12 +100,16 @@ def dispatch(args):
     controller = controllers.get(args.object)
     if controller:
         return call(controller.get(args.verb), args)
-    else:
-        raise ValueError("Invalid object {}".format(args.object))
+    raise ValueError("Invalid object {}".format(args.object))
 
 
 def call(func, args):
+    """
+    Call application controller
+    :param func:
+    :param args:
+    :return:
+    """
     if callable(func):
         return func(args)
-    else:
-        raise ValueError("Invalid action call {} on object {}".format(args.verb, args.object))
+    raise ValueError("Invalid action call {} on object {}".format(args.verb, args.object))
