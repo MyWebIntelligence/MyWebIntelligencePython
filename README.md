@@ -5,7 +5,7 @@ A Sqlite database browser like https://sqlitebrowser.org/ may be useful.
 
 ## Prerequisit
 
-Install python (on Windows https://www.python.org/downloads/release/python-374/) and pip (on windows https://pip.pypa.io/en/stable/installing/) if needed
+Install python (on Windows https://www.python.org/downloads/release/python-374/) and/or pip (on windows https://pip.pypa.io/en/stable/installing/) if needed
 
 Install virtualenv if needed
 
