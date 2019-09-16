@@ -3,13 +3,16 @@
 MyWebIntelligence is a tool to create projects for research in digital humanities.
 A Sqlite database browser like https://sqlitebrowser.org/ may be useful.
 
-## Activate your Virtual Environment
+## Prerequisit
+
+Install python (on Windows https://www.python.org/downloads/release/python-374/) and pip (on windows https://pip.pypa.io/en/stable/installing/) if needed
 
 Install virtualenv if needed
 
 ```bash
 $ pip install virtualenv
 ```
+## Activate your Virtual Environment
 
 Change to application directory, create virtual env then activate
 
