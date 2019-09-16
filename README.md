@@ -16,7 +16,7 @@ $ pip install virtualenv
 Install the My Web intelligence Repository
 
 ```bash
-$ git https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
+$ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
 ```
 
 
