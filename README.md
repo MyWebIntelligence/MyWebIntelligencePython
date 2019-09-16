@@ -3,7 +3,7 @@
 MyWebIntelligence is a tool to create projects for research in digital humanities.
 A Sqlite database browser like https://sqlitebrowser.org/ may be useful.
 
-## Prerequisit
+## Prerequisit (Python+Pip+Virtualenv+Git)
 
 Install python (on Windows https://www.python.org/downloads/release/python-374/) and/or pip (on windows https://pip.pypa.io/en/stable/installing/) if needed
 
