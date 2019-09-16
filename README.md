@@ -12,6 +12,14 @@ Install virtualenv if needed
 ```bash
 $ pip install virtualenv
 ```
+
+Install the My Web intelligence Repository
+
+```bash
+$ git https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
+```
+
+
 ## Activate your Virtual Environment
 
 Change to application directory, create virtual env then activate
