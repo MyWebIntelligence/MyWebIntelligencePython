@@ -13,7 +13,7 @@ Install virtualenv (https://virtualenv.pypa.io/en/stable/userguide/) if needed
 $ pip install virtualenv
 ```
 
-Install the git My Web intelligence Repository (on windows https://www.atlassian.com/git/tutorials/install-git#windows)
+Install the git My Web intelligence Repository (on windows https://git-scm.com/ AND https://www.atlassian.com/git/tutorials/install-git#windows)
 
 ```bash
 $ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
