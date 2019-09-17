@@ -35,6 +35,10 @@ $ source venv/bin/activate
 For Windows
 
 ```bash
+$ python -m venv C:\Users\some_user\project_folder\venv
+```
+
+```bash
 C:\Users\some_user\project_folder> venv\Scripts\activate
 ```
 
