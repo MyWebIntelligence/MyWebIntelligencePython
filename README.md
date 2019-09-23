@@ -67,6 +67,7 @@ For Windows
 
 ```bash
 C:\Users\some_user\project_folder> venv\Scripts\activate
+```
 
 ## Create new land
 
