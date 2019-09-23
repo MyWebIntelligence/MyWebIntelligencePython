@@ -55,6 +55,18 @@ $ venv/bin/python mywi.py db setup
 ```
 
 # Lands
+## Activate your Virtual Environment
+
+Change to application directory and activate venv
+
+```bash
+$ source venv/bin/activate
+```
+
+For Windows
+
+```bash
+C:\Users\some_user\project_folder> venv\Scripts\activate
 
 ## Create new land
 
