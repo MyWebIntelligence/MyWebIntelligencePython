@@ -55,7 +55,7 @@ $ venv/bin/python mywi.py db setup
 ```
 
 # Lands
-## Activate your Virtual Environment
+## RE-Activate your Virtual Environment
 
 Change to application directory and activate venv
 
