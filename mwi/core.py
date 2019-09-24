@@ -369,10 +369,9 @@ def get_land_dictionary(land: model.Land):
     :param land:
     :return:
     """
-    select = model.Word.select()\
+    return model.Word.select()\
         .join(model.LandDictionary, JOIN.LEFT_OUTER)\
         .where(model.LandDictionary.land == land)
-    return [w.term for w in select]
 
 
 def land_relevance(land: model.Land):
@@ -399,14 +398,15 @@ def expression_relevance(dictionary, expression: model.Expression) -> int:
     :param expression:
     :return:
     """
-    stemmed_dict = [stem_word(w) for w in dictionary]
+    lemmas = [w.lemma for w in dictionary]
     occurrences = []
     try:
-        content = word_tokenize(expression.readable, language='french')
-        occurrences = [word for word in content if stem_word(word) in stemmed_dict]
+        content = [stem_word(w) for w in word_tokenize(expression.readable, language='french')]
+        content = " ".join(content)
+        occurrences = [content.count(lemma) for lemma in lemmas]
     except:
         pass
-    return len(occurrences)
+    return sum(occurrences)
 
 
 def export_land(land: model.Land, export_type: str, minimum_relevance: int):
