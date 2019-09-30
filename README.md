@@ -24,6 +24,7 @@ $ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
 
 Change to application directory, create virtual env then activate
 
+FOR MAC
 ```bash
 $ virtualenv venv
 ```
@@ -32,7 +33,7 @@ $ virtualenv venv
 $ source venv/bin/activate
 ```
 
-For Windows
+FOR WINDOWS
 
 ```bash
 $ python -m venv C:\Users\some_user\project_folder\venv
