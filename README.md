@@ -57,6 +57,7 @@ C:\Users\some_user\project_folder> venv\Scripts\activate
 ```bash
 [venv/bin/]$ python mywi.py db setup
 ```
+Say 'Y' to the prompt for create your DB
 
 # Lands
 ## RE-Activate your Virtual Environment
