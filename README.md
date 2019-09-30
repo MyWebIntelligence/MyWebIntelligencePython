@@ -25,20 +25,23 @@ $ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
 Change to application directory, create virtual env then activate
 
 FOR MAC
+
+Create an instance in the current directory
 ```bash
 $ virtualenv venv
 ```
-
+Activate your virtual env
 ```bash
 $ source venv/bin/activate
 ```
 
 FOR WINDOWS
-
+Create an instance in the current directory
 ```bash
 $ python -m venv C:\Users\some_user\project_folder\venv
 ```
 
+Activate your virtual env
 ```bash
 C:\Users\some_user\project_folder> venv\Scripts\activate
 ```
