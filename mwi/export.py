@@ -384,11 +384,14 @@ class Export:
             '{%s}size' % self.gexf_ns['viz'],
             attrib={'value': str(row[size_key])})
         attvalues = etree.SubElement(node, 'attvalues')
-        for i, attribute in enumerate(attributes):
-            etree.SubElement(
-                attvalues,
-                'attvalue',
-                attrib={'for': str(i), 'value': str(row[attribute[0]])})
+        try:
+            for i, attribute in enumerate(attributes):
+                etree.SubElement(
+                    attvalues,
+                    'attvalue',
+                    attrib={'for': str(i), 'value': str(row[attribute[0]])})
+        except ValueError:
+            print(row)
 
     def gexf_edge(self, values, edges):
         """
