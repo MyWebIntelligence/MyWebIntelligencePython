@@ -118,6 +118,15 @@ To re crawl pages in error (503 for example), set the http status code with `--h
 [venv/bin/]$ python mywi.py land crawl --name=LAND_NAME [--limit=LIMIT, --http=HTTP_STATUS]
 ```
 
+## Crawl domains
+
+Get info from domains created after expression addition.
+To re crawl domains in error (503 for example), set the http status code with `--http`.
+
+```bash
+[venv/bin/]$ python mywi.py domain crawl [--limit=LIMIT, --http=HTTP_STATUS]
+```
+
 ## Export land
 
 type = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf', 'mediacsv']
@@ -130,15 +139,6 @@ type = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf', 'mediacsv']
 
 ```bash
 [venv/bin/]$ python mywi.py land properties --name=LAND_NAME
-```
-
-## Crawl domains
-
-Get info from domains created after expression addition.
-To re crawl domains in error (503 for example), set the http status code with `--http`.
-
-```bash
-[venv/bin/]$ python mywi.py domain crawl [--limit=LIMIT, --http=HTTP_STATUS]
 ```
 
 ## Update domains from heuristic settings
