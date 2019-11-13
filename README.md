@@ -49,7 +49,7 @@ C:\Users\some_user\project_folder> venv\Scripts\activate
 ## Install dependencies
 
 ```bash
- [venv/bin/]$ pip install -r requirements.txt
+ [venv/bin/MyWebIntelligencePython]$ pip install -r requirements.txt
 ```
 
 ## Setup Database
