@@ -15,7 +15,6 @@ import settings
 from . import model
 from .export import Export
 
-
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
@@ -297,10 +296,11 @@ def process_expression_content(expression: model.Expression, html: str) -> model
 
     clean_html(soup)
 
-    path = 'data/lands/%s/%s' % (expression.land.get_id(), expression.get_id())
-    with open(path, 'w') as html_file:
-        html_file.write(html.strip())
-    html_file.close()
+    if settings.archive is True:
+        path = 'data/lands/%s/%s' % (expression.land.get_id(), expression.get_id())
+        with open(path, 'w', encoding="utf-8") as html_file:
+            html_file.write(html.strip())
+        html_file.close()
 
     expression.readable = get_readable(soup)
     expression.relevance = expression_relevance(words, expression)
@@ -369,8 +369,8 @@ def get_land_dictionary(land: model.Land):
     :param land:
     :return:
     """
-    return model.Word.select()\
-        .join(model.LandDictionary, JOIN.LEFT_OUTER)\
+    return model.Word.select() \
+        .join(model.LandDictionary, JOIN.LEFT_OUTER) \
         .where(model.LandDictionary.land == land)
 
 
@@ -381,7 +381,7 @@ def land_relevance(land: model.Land):
     :return:
     """
     words = get_land_dictionary(land)
-    select = model.Expression.select()\
+    select = model.Expression.select() \
         .where(model.Expression.land == land, model.Expression.readable.is_null(False))
     row_count = select.count()
     if row_count > 0:
