@@ -6,6 +6,8 @@ from typing import Union
 from argparse import Namespace
 from urllib.parse import urlparse
 import requests
+import aiohttp
+import asyncio
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.stem.snowball import FrenchStemmer
@@ -166,28 +168,36 @@ def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tuple:
             model.Expression.fetched_at.is_null())
     expressions = expressions.order_by(model.Expression.depth)
 
-    processed = 0
-    errors = 0
+    loop = asyncio.get_event_loop()
     for expression in list(expressions):
-        try:
-            request = requests.get(
-                expression.url,
-                headers={"User-Agent": settings.user_agent},
-                timeout=5)
-            expression.http_status = request.status_code
-            expression.fetched_at = model.datetime.datetime.now()
-            if ('html' in request.headers['content-type']) and (request.status_code == 200):
-                process_expression_content(expression, request.text)
-                processed += 1
-            else:
-                errors += 1
-        except Exception as exception:
-            expression.http_status = '000'
-            expression.fetched_at = model.datetime.datetime.now()
-            errors += 1
-            print(exception)
+        loop.create_task(crawl_expression(expression))
+
+    tasks = asyncio.Task.all_tasks(loop=loop)
+    group = asyncio.gather(*tasks)
+    loop.run_until_complete(group)
+    print(list(group))
+    return 0, 0
+
+
+async def crawl_expression(expression):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(expression.url, headers={"User-Agent": settings.user_agent}, timeout=5) as response:
+                expression.http_status = response.status
+                expression.fetched_at = model.datetime.datetime.now()
+                if ('html' in response.headers['content-type']) and (response.status == 200):
+                    process_expression_content(expression, await response.text())
+                    expression.save()
+                    return 1
+                else:
+                    expression.save()
+                    return 0
+    except Exception as exception:
+        expression.http_status = '000'
+        expression.fetched_at = model.datetime.datetime.now()
         expression.save()
-    return processed, errors
+        print(exception)
+        return 0
 
 
 def add_expression(land: model.Land, url: str, depth=0) -> Union[model.Expression, bool]:
