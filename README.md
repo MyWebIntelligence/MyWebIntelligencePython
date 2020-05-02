@@ -55,9 +55,10 @@ C:\Users\some_user\project_folder> venv\Scripts\activate
 ## Setup Database
 
 ```bash
-[venv/bin/]$ python mywi.py db setup
+[venv/bin/]$ python mywi.py db setup [--client=1]
 ```
-Say 'Y' to the prompt for create your DB
+Create database (warning, destroys any previous data).
+Optional parameter "client" to only create client tables in order to use MyWeb client application 
 
 # Lands
 ## RE-Activate your Virtual Environment

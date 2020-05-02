@@ -66,6 +66,10 @@ def command_input():
                         type=str,
                         help='Limit crawling to specific http status (re crawling)',
                         nargs='?')
+    parser.add_argument('--client',
+                        type=str,
+                        help='Setup client tables only',
+                        nargs='?')
     args = parser.parse_args()
     dispatch(args)
 

@@ -1,5 +1,5 @@
 """
-Model definition
+Core Model definition
 """
 
 import datetime
@@ -13,6 +13,7 @@ class BaseModel(Model):
     """
     BaseModel
     """
+
     class Meta:
         """
         Meta class to set DB
@@ -67,11 +68,13 @@ class ExpressionLink(BaseModel):
     """
     ExpressionLink model
     """
+
     class Meta:
         """
         Meta class to set composite primary key
         """
         primary_key = CompositeKey('source', 'target')
+
     source = ForeignKeyField(Expression, backref='links_to', on_delete='CASCADE')
     target = ForeignKeyField(Expression, backref='linked_by', on_delete='CASCADE')
 
@@ -88,11 +91,13 @@ class LandDictionary(BaseModel):
     """
     LandDictionary model
     """
+
     class Meta:
         """
         Meta class to set composite primary key
         """
         primary_key = CompositeKey('land', 'word')
+
     land = ForeignKeyField(Land, backref='words', on_delete='CASCADE')
     word = ForeignKeyField(Word, backref='lands', on_delete='CASCADE')
 
@@ -104,3 +109,44 @@ class Media(BaseModel):
     expression = ForeignKeyField(Expression, backref='medias', on_delete='CASCADE')
     url = TextField()
     type = CharField(max_length=30)
+
+
+"""
+Client Model Definition
+"""
+
+
+class Project(BaseModel):
+    """
+    Project model
+    """
+    land = ForeignKeyField(Land, backref='projects', on_delete='CASCADE')
+    name = TextField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+
+
+class ProjectExpression(BaseModel):
+    """
+    Project expression model
+    """
+    project = ForeignKeyField(Project, backref='expressions', on_delete='CASCADE')
+    readable = TextField()
+
+
+class ProjectTag(BaseModel):
+    """
+    Project tag model
+    color: hex value string as #FF0022
+    """
+    project = ForeignKeyField(Project, backref='tags', on_delete='CASCADE')
+    parent = ForeignKeyField('self', null=True, backref='children', on_delete='CASCADE')
+    name = TextField()
+    color = CharField(max_length=7)
+
+
+class TaggedContent(BaseModel):
+    tag = ForeignKeyField(ProjectTag, backref='contents', on_delete='CASCADE')
+    expression = ForeignKeyField(ProjectExpression, backref='tagged_contents', on_delete='CASCADE')
+    text = TextField()
+    from_char = IntegerField()
+    to_char = IntegerField()
