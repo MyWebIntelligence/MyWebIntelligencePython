@@ -213,7 +213,7 @@ def add_expression(land: model.Land, url: str, depth=0) -> Union[model.Expressio
     if is_crawlable(url):
         domain_name = get_domain_name(url)
         domain = model.Domain.get_or_create(name=domain_name)[0]
-        expression = model.Expression.get_or_none(model.Expression.url == url)
+        expression = model.Expression.get_or_none(model.Expression.url == url, model.Expression.land == land)
         if expression is None:
             expression = model.Expression.create(land=land, domain=domain, url=url, depth=depth)
         else:
