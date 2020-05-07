@@ -181,7 +181,8 @@ def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tuple:
 
 async def crawl_expression(expression):
     try:
-        async with aiohttp.ClientSession() as session:
+        connector = aiohttp.TCPConnector(limit=settings.max_requests)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(expression.url, headers={"User-Agent": settings.user_agent}, timeout=5) as response:
                 expression.http_status = response.status
                 expression.fetched_at = model.datetime.datetime.now()
