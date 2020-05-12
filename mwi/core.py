@@ -144,10 +144,10 @@ def get_meta_content(soup: BeautifulSoup, name: str):
     :return:
     """
     tag = soup.find('meta', attrs={'name': name})
-    return tag['content'] if tag else ''
+    return tag['content'] if (tag and 'content' in tag) else ''
 
 
-def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tuple:
+async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tuple:
     """
     Start land crawl
     :param land:
@@ -155,6 +155,7 @@ def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tuple:
     :param http:
     :return:
     """
+    print("Crawling land %d" % land.id)
     expressions = model.Expression.select()
     if limit > 0:
         expressions = expressions.limit(limit)
@@ -168,37 +169,33 @@ def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tuple:
             model.Expression.fetched_at.is_null())
     expressions = expressions.order_by(model.Expression.depth)
 
-    loop = asyncio.get_event_loop()
-    for expression in list(expressions):
-        loop.create_task(crawl_expression(expression))
+    connector = aiohttp.TCPConnector(verify_ssl=False)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        tasks = []
+        for expression in list(expressions):
+            tasks.append(crawl_expression(expression, session))
 
-    tasks = asyncio.Task.all_tasks(loop=loop)
-    group = asyncio.gather(*tasks)
-    loop.run_until_complete(group)
-    print(list(group))
-    return 0, 0
+        results = await asyncio.gather(*tasks)
+        return expressions.count(), expressions.count() - sum(results)
 
 
-async def crawl_expression(expression):
+async def crawl_expression(expression, session):
+    print("Crawling %s" % expression.url)
+    result = 0
+    expression.http_status = '000'
+    expression.fetched_at = model.datetime.datetime.now()
     try:
-        connector = aiohttp.TCPConnector(limit=settings.max_requests)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.get(expression.url, headers={"User-Agent": settings.user_agent}, timeout=5) as response:
-                expression.http_status = response.status
-                expression.fetched_at = model.datetime.datetime.now()
-                if ('html' in response.headers['content-type']) and (response.status == 200):
-                    process_expression_content(expression, await response.text())
-                    expression.save()
-                    return 1
-                else:
-                    expression.save()
-                    return 0
-    except Exception as exception:
-        expression.http_status = '000'
-        expression.fetched_at = model.datetime.datetime.now()
+        async with session.get(expression.url, headers={"User-Agent": settings.user_agent}, timeout=5) as response:
+            expression.http_status = response.status
+            if ('html' in response.headers['content-type']) and (response.status == 200):
+                content = await response.text()
+                process_expression_content(expression, content)
+                result = 1
+            expression.save()
+            return result
+    except Exception:
         expression.save()
-        print(exception)
-        return 0
+        return result
 
 
 def add_expression(land: model.Land, url: str, depth=0) -> Union[model.Expression, bool]:
@@ -300,8 +297,10 @@ def process_expression_content(expression: model.Expression, html: str) -> model
     soup = BeautifulSoup(html, 'html.parser')
     words = get_land_dictionary(expression.land)
 
-    expression.lang = soup.html.get('lang', '')
-    expression.title = soup.title.string.strip()
+    if soup.html is not None:
+        expression.lang = soup.html.get('lang', '')
+    if soup.title is not None:
+        expression.title = soup.title.string.strip()
     expression.description = get_meta_content(soup, 'description')
     expression.keywords = get_meta_content(soup, 'keywords')
 

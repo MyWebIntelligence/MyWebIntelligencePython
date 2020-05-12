@@ -3,6 +3,7 @@ Application controller
 """
 import os
 from peewee import JOIN, fn
+import asyncio
 from . import core
 from . import model
 
@@ -166,10 +167,9 @@ class LandController:
         if land is None:
             print('Land "%s" not found' % args.name)
         else:
-            print("%d expressions processed (%s errors)" % core.crawl_land(
-                land,
-                fetch_limit,
-                http_status))
+            loop = asyncio.get_event_loop()
+            results = loop.run_until_complete(core.crawl_land(land, fetch_limit, http_status))
+            print("%d expressions processed (%d errors)" % results)
             return 1
         return 0
 
