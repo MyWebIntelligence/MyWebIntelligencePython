@@ -169,7 +169,7 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
             model.Expression.fetched_at.is_null())
     expressions = expressions.order_by(model.Expression.depth)
 
-    connector = aiohttp.TCPConnector(verify_ssl=False)
+    connector = aiohttp.TCPConnector(limit=0, verify_ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = []
         for expression in list(expressions):
@@ -185,7 +185,7 @@ async def crawl_expression(expression, session):
     expression.http_status = '000'
     expression.fetched_at = model.datetime.datetime.now()
     try:
-        async with session.get(expression.url, headers={"User-Agent": settings.user_agent}, timeout=5) as response:
+        async with session.get(expression.url, headers={"User-Agent": settings.user_agent}) as response:
             expression.http_status = response.status
             if ('html' in response.headers['content-type']) and (response.status == 200):
                 content = await response.text()
@@ -213,8 +213,6 @@ def add_expression(land: model.Land, url: str, depth=0) -> Union[model.Expressio
         expression = model.Expression.get_or_none(model.Expression.url == url, model.Expression.land == land)
         if expression is None:
             expression = model.Expression.create(land=land, domain=domain, url=url, depth=depth)
-        else:
-            print("URL %s already exists in land" % url)
         return expression
     return False
 
@@ -261,9 +259,7 @@ def link_expression(land: model.Land, source_expression: model.Expression, url: 
                     target_id=target_expression.get_id())
                 return True
             except IntegrityError:
-                print("Link from %s to %s already exists" % (
-                    source_expression.get_id(),
-                    target_expression.get_id()))
+                pass
     return False
 
 
@@ -316,6 +312,7 @@ def process_expression_content(expression: model.Expression, html: str) -> model
     expression.relevance = expression_relevance(words, expression)
 
     if expression.relevance > 0:
+        print("Expression #%d approved" % expression.get_id())
         extract_medias(soup, expression)
         expression.approved_at = model.datetime.datetime.now()
         if expression.depth < 3:
@@ -343,7 +340,6 @@ def extract_medias(content, expression):
             if is_valid_src:
                 if src.startswith("/"):
                     src = expression.url[:expression.url.find("/", 9) + 1].strip('/') + src
-                print("Linking media")
                 media = model.Media.create(expression=expression, url=src, type=tag)
                 media.save()
 
