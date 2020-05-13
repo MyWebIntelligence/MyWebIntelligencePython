@@ -169,7 +169,7 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
             model.Expression.fetched_at.is_null())
     expressions = expressions.order_by(model.Expression.depth)
 
-    connector = aiohttp.TCPConnector(limit=0, verify_ssl=False)
+    connector = aiohttp.TCPConnector(limit=settings.parallel_connections, verify_ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = []
         for expression in list(expressions):
