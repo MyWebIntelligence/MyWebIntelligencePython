@@ -185,7 +185,12 @@ async def crawl_expression(expression, session):
     expression.http_status = '000'
     expression.fetched_at = model.datetime.datetime.now()
     try:
-        async with session.get(expression.url, headers={"User-Agent": settings.user_agent}) as response:
+        async with session.get(expression.url,
+                               headers={"User-Agent": settings.user_agent},
+                               timeout=aiohttp.ClientTimeout(
+                                   total=None,
+                                   sock_connect=5,
+                                   sock_read=5)) as response:
             expression.http_status = response.status
             if ('html' in response.headers['content-type']) and (response.status == 200):
                 content = await response.text()
