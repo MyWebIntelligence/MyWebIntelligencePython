@@ -115,6 +115,7 @@ def crawl_domains(limit: int = 0, http: str = None):
             domain.fetched_at = model.datetime.datetime.now()
             if ('html' in request.headers['content-type']) and (request.status_code == 200):
                 process_domain_content(domain, request.text)
+                print("Domain %s done" % domain.name)
                 processed += 1
         except Exception as exception:
             print(exception)
