@@ -116,37 +116,21 @@ Client Model Definition
 """
 
 
-class Project(BaseModel):
-    """
-    Project model
-    """
-    land = ForeignKeyField(Land, backref='projects', on_delete='CASCADE')
-    name = TextField()
-    created_at = DateTimeField(default=datetime.datetime.now)
-
-
-class ProjectExpression(BaseModel):
-    """
-    Project expression model
-    """
-    project = ForeignKeyField(Project, backref='expressions', on_delete='CASCADE')
-    readable = TextField()
-
-
-class ProjectTag(BaseModel):
+class Tag(BaseModel):
     """
     Project tag model
     color: hex value string as #FF0022
     """
-    project = ForeignKeyField(Project, backref='tags', on_delete='CASCADE')
+    land = ForeignKeyField(Land, backref='tags', on_delete='CASCADE')
     parent = ForeignKeyField('self', null=True, backref='children', on_delete='CASCADE')
     name = TextField()
+    sorting = IntegerField()
     color = CharField(max_length=7)
 
 
 class TaggedContent(BaseModel):
-    tag = ForeignKeyField(ProjectTag, backref='contents', on_delete='CASCADE')
-    expression = ForeignKeyField(ProjectExpression, backref='tagged_contents', on_delete='CASCADE')
+    tag = ForeignKeyField(Tag, backref='contents', on_delete='CASCADE')
+    expression = ForeignKeyField(Expression, backref='tagged_contents', on_delete='CASCADE')
     text = TextField()
     from_char = IntegerField()
     to_char = IntegerField()

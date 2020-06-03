@@ -21,7 +21,7 @@ class DbController:
         :return:
         """
         core_tables = [model.Land, model.Domain, model.Expression, model.ExpressionLink, model.Word, model.LandDictionary, model.Media]
-        client_tables = [model.Project, model.ProjectExpression, model.ProjectTag, model.TaggedContent]
+        client_tables = [model.Tag, model.TaggedContent]
         tables = client_tables if args.client is not None else core_tables
 
         if core.confirm("Warning, existing data will be lost, type 'Y' to proceed : "):
