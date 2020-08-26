@@ -3,7 +3,52 @@
 MyWebIntelligence is a tool to create projects for research in digital humanities.
 A Sqlite database browser like https://sqlitebrowser.org/ may be useful.
 
-## Prerequisit (Python+Pip+Virtualenv+Git)
+# Install from Docker
+
+## Requirements
+
+* [Docker](https://www.docker.com/products/docker-desktop)
+
+## Installation
+
+On your host machine, create a directory to store database file and other persistent data.
+This directory will be further mounted in Docker container.
+
+Clone project
+ 
+```bash
+$ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
+```
+
+Inside project directory `$ cd mywi`, build Docker image
+
+```bash
+$ docker build -t mwi:1.0 .
+```
+
+Then run image with mounted data directory
+
+```bash
+$ docker run -dit --name mwi -v /path/to/hosted/mywi/data:/app/data mwi:1.0
+```
+
+Next, execute interactive shell on the container
+
+```bash
+$ docker exec -it mwi bash
+``` 
+
+Create database if it does not exist
+
+```
+# python mywi.py db setup
+```
+
+Or use commands described in [Usage](#usage)
+
+# Install development environment
+
+## Prerequisites (Python+Pip+Virtualenv+Git)
 
 Install python (on Windows https://www.python.org/downloads/release/python-374/) and/or pip (on windows https://pip.pypa.io/en/stable/installing/) if needed
 
@@ -52,42 +97,30 @@ C:\Users\some_user\project_folder> venv\Scripts\activate
  [venv/bin/MyWebIntelligencePython]$ pip install -r requirements.txt
 ```
 
+# Usage
+
 ## Setup Database
 
 ```bash
-[venv/bin/]$ python mywi.py db setup [--client=1]
+[venv/bin/]$ python mywi.py db setup
 ```
-Create database (warning, destroys any previous data).
-Optional parameter "client" to only create client tables in order to use MyWeb client application 
+Create database (warning, destroys any previous data). 
 
-# Lands
-## RE-Activate your Virtual Environment
+## Lands
 
-Change to application directory and activate venv
-
-```bash
-$ source venv/bin/activate
-```
-
-For Windows
-
-```bash
-C:\Users\some_user\project_folder> venv\Scripts\activate
-```
-
-## Create new land
+### Create new land
 
 ```bash
 [venv/bin/]$ python mywi.py land create --name=LAND_NAME --desc=LAND_DESCRIPTION
 ```
 
-## List created lands
+### List created lands
 
 ```bash
 [venv/bin/]$ python mywi.py land list
 ```
 
-## Add terms to land
+### Add terms to land
 
 Terms argument is a quoted list of comma separated words `--terms="asthma, asthmatic, William Turner"`
 
@@ -95,7 +128,7 @@ Terms argument is a quoted list of comma separated words `--terms="asthma, asthm
 [venv/bin/]$ python mywi.py land addterm --land=LAND_NAME --terms=TERMS
 ```
 
-## Add url to land
+### Add url to land
 
 Urls argument is a quoted list of URL, space or comma separated `--urls="https://domain1.com/page1.html, https://domain2.com/page2.html"`.
 Path argument must point to a file containing one URL per line, file extension doesn't matter `--path=data/url_list.txt`.
@@ -104,13 +137,13 @@ Path argument must point to a file containing one URL per line, file extension d
 [venv/bin/]$ python mywi.py land addurl --land=LAND_NAME [--urls=URLS | --path=PATH]
 ```
 
-## Delete land
+### Delete land
 
 ```bash
 [venv/bin/]$ python mywi.py land delete --name=LAND_NAME
 ```
 
-## Crawl land urls
+### Crawl land urls
 
 Start crawling URLs. Each level of depth are processed separately. The number of URLs to crawl can be set with `--limit` argument.
 To re crawl pages in error (503 for example), set the http status code with `--http`.
@@ -119,7 +152,7 @@ To re crawl pages in error (503 for example), set the http status code with `--h
 [venv/bin/]$ python mywi.py land crawl --name=LAND_NAME [--limit=LIMIT, --http=HTTP_STATUS]
 ```
 
-## Crawl domains
+### Crawl domains
 
 Get info from domains created after expression addition.
 To re crawl domains in error (503 for example), set the http status code with `--http`.
@@ -128,7 +161,7 @@ To re crawl domains in error (503 for example), set the http status code with `-
 [venv/bin/]$ python mywi.py domain crawl [--limit=LIMIT, --http=HTTP_STATUS]
 ```
 
-## Export land
+### Export land
 
 type = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf', 'mediacsv']
 
@@ -136,13 +169,13 @@ type = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf', 'mediacsv']
 [venv/bin/]$ python mywi.py land export --name=LAND_NAME --type=EXPORT_TYPE --minrel=MINIMUM_RELEVANCE
 ```
 
-## Print land properties
+### Print land properties
 
 ```bash
 [venv/bin/]$ python mywi.py land properties --name=LAND_NAME
 ```
 
-## Update domains from heuristic settings
+### Update domains from heuristic settings
 
 ```bash
 [venv/bin/]$ python mywi.py heuristic update

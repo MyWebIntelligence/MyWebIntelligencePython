@@ -20,9 +20,8 @@ class DbController:
         :param args:
         :return:
         """
-        core_tables = [model.Land, model.Domain, model.Expression, model.ExpressionLink, model.Word, model.LandDictionary, model.Media]
-        client_tables = [model.Tag, model.TaggedContent]
-        tables = client_tables if args.client is not None else core_tables
+        tables = [model.Land, model.Domain, model.Expression, model.ExpressionLink, model.Word,
+                  model.LandDictionary, model.Media, model.Tag, model.TaggedContent]
 
         if core.confirm("Warning, existing data will be lost, type 'Y' to proceed : "):
             model.DB.drop_tables(tables)
@@ -45,18 +44,18 @@ class LandController:
         :param args:
         :return:
         """
-        lands = model.Land.select()\
-            .join(model.LandDictionary, JOIN.LEFT_OUTER)\
-            .join(model.Word, JOIN.LEFT_OUTER)\
-            .switch(model.Land)\
-            .join(model.Expression, JOIN.LEFT_OUTER)\
-            .group_by(model.Land.name)\
+        lands = model.Land.select() \
+            .join(model.LandDictionary, JOIN.LEFT_OUTER) \
+            .join(model.Word, JOIN.LEFT_OUTER) \
+            .switch(model.Land) \
+            .join(model.Expression, JOIN.LEFT_OUTER) \
+            .group_by(model.Land.name) \
             .order_by(model.Land.name)
         if lands.count() > 0:
             for land in lands:
-                exp_stats = model.Expression\
-                    .select(fn.COUNT(model.Expression.id).alias('num'))\
-                    .join(model.Land)\
+                exp_stats = model.Expression \
+                    .select(fn.COUNT(model.Expression.id).alias('num')) \
+                    .join(model.Land) \
                     .where((model.Expression.land == land)
                            & (model.Expression.fetched_at.is_null()))
                 to_crawl = [s.num for s in exp_stats]
