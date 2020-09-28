@@ -2,6 +2,7 @@
 Core functions
 """
 import re
+from os import path
 from typing import Union
 from argparse import Namespace
 from urllib.parse import urlparse
@@ -216,7 +217,9 @@ def add_expression(land: model.Land, url: str, depth=0) -> Union[model.Expressio
     if is_crawlable(url):
         domain_name = get_domain_name(url)
         domain = model.Domain.get_or_create(name=domain_name)[0]
-        expression = model.Expression.get_or_none(model.Expression.url == url, model.Expression.land == land)
+        expression = model.Expression.get_or_none(
+            model.Expression.url == url,
+            model.Expression.land == land)
         if expression is None:
             expression = model.Expression.create(land=land, domain=domain, url=url, depth=depth)
         return expression
@@ -309,8 +312,9 @@ def process_expression_content(expression: model.Expression, html: str) -> model
     clean_html(soup)
 
     if settings.archive is True:
-        path = 'data/lands/%s/%s' % (expression.land.get_id(), expression.get_id())
-        with open(path, 'w', encoding="utf-8") as html_file:
+        loc = path.join(settings.data_location, 'lands/%s/%s') \
+              % (expression.land.get_id(), expression.get_id())
+        with open(loc, 'w', encoding="utf-8") as html_file:
             html_file.write(html.strip())
         html_file.close()
 
@@ -358,7 +362,7 @@ def get_readable(content):
     """
     text = content.get_text(separator=' ')
     lines = text.split("\n")
-    text_lines = [l.strip() for l in lines if len(l.strip()) > 0]
+    text_lines = [line.strip() for line in lines if len(line.strip()) > 0]
     return "\n".join(text_lines)
 
 
@@ -423,20 +427,33 @@ def expression_relevance(dictionary, expression: model.Expression) -> int:
 
 def export_land(land: model.Land, export_type: str, minimum_relevance: int):
     """
-    Export land data
+    Export land data, file extension is set according to export type
     :param land:
     :param export_type:
     :param minimum_relevance:
     :return:
     """
     date_tag = model.datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    filename = 'data/export_%s_%s_%s' % (land.name, export_type, date_tag)
+    filename = path.join(settings.data_location, 'export_land_%s_%s_%s') \
+        % (land.name, export_type, date_tag)
     export = Export(export_type, land, minimum_relevance)
     count = export.write(export_type, filename)
     if count > 0:
         print("Successfully exported %s records to %s" % (count, filename))
     else:
         print("No records to export, check crawling state or lower minimum relevance threshold")
+
+
+def export_tags(land: model.Land, export_type: str, minimum_relevance: int):
+    date_tag = model.datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = path.join(settings.data_location, 'export_tags_%s_%s_%s.csv') \
+        % (land.name, export_type, date_tag)
+    export = Export(export_type, land, minimum_relevance)
+    res = export.export_tags(filename)
+    if res == 1:
+        print("Successfully exported %s" % filename)
+    else:
+        print("Error exporting %s" % filename)
 
 
 def update_heuristic():

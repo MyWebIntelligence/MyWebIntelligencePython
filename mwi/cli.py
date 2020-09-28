@@ -2,7 +2,12 @@
 Command Line Interface
 """
 import argparse
-from .controller import DbController, DomainController, LandController, HeuristicController
+from .controller import \
+    DbController, \
+    DomainController, \
+    LandController, \
+    HeuristicController, \
+    TagController
 
 
 def command_run(args: dict):
@@ -40,7 +45,7 @@ def command_input():
                         help='Description of the object')
     parser.add_argument('--type',
                         type=str,
-                        help='Export type [pagecsv, pagegexf, fullpagecsv, nodecsv, nodegexf]')
+                        help='Export type, see README for reference')
     parser.add_argument('--terms',
                         type=str,
                         help='Terms to add to request dictionnary, comma separated')
@@ -92,6 +97,9 @@ def dispatch(args):
             'addterm': LandController.addterm,
             'addurl':  LandController.addurl,
             'props':   LandController.properties
+        },
+        'tag': {
+            'export': TagController.export,
         },
         'heuristic': {
             'update': HeuristicController.update

@@ -1,3 +1,5 @@
+data_location = '../data'
+
 archive = False
 
 parallel_connections = 10

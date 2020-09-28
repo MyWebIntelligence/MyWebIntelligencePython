@@ -2,11 +2,13 @@
 Core Model definition
 """
 
+from os import path
+import settings
 import datetime
 from peewee import SqliteDatabase, Model, CharField, TextField, \
     DateTimeField, ForeignKeyField, IntegerField, CompositeKey
 
-DB = SqliteDatabase('data/mwi.db')
+DB = SqliteDatabase(path.join(settings.data_location, 'mwi.db'))
 
 
 class BaseModel(Model):

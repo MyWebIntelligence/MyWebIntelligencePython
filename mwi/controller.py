@@ -1,6 +1,7 @@
 """
 Application controller
 """
+import settings
 import os
 from peewee import JOIN, fn
 import asyncio
@@ -82,7 +83,7 @@ class LandController:
         """
         core.check_args(args, ('name', 'desc'))
         land = model.Land.create(name=args.name, description=args.desc)
-        os.makedirs('data/lands/%s' % land.get_id(), exist_ok=True)
+        os.makedirs(os.path.join(settings.data_location, 'lands/%s') % land.get_id(), exist_ok=True)
         print('Land "%s" created' % args.name)
         return 1
 
@@ -181,17 +182,20 @@ class LandController:
         """
         minimum_relevance = 1
         core.check_args(args, ('name', 'type'))
+        valid_types = ['pagecsv', 'fullpagecsv', 'nodecsv', 'pagegexf', 'nodegexf', 'mediacsv']
+
         if isinstance(args.minrel, int) and (args.minrel >= 0):
             minimum_relevance = args.minrel
             print("Minimum relevance set to %s" % minimum_relevance)
+            
         land = model.Land.get_or_none(model.Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
         else:
-            if args.type in core.Export.types:
+            if args.type in valid_types:
                 core.export_land(land, args.type, minimum_relevance)
                 return 1
-            print('Invalid export type "%s" [%s]' % (args.type, ', '.join(core.Export.types)))
+            print('Invalid export type "%s" [%s]' % (args.type, ', '.join(valid_types)))
         return 0
 
     @staticmethod
@@ -222,6 +226,37 @@ class DomainController:
         http_status = core.get_arg_option('http', args, set_type=str, default=None)
         print("%d domains processed" % core.crawl_domains(fetch_limit, http_status))
         return 1
+
+
+class TagController:
+    """
+    Tag controller class
+    """
+
+    @staticmethod
+    def export(args: core.Namespace):
+        """
+        Export tags
+        :param args:
+        :return:
+        """
+        minimum_relevance = 1
+        core.check_args(args, ('name', 'type'))
+        valid_types = ['matrix', 'content']
+
+        if isinstance(args.minrel, int) and (args.minrel >= 0):
+            minimum_relevance = args.minrel
+            print("Minimum relevance set to %s" % minimum_relevance)
+
+        land = model.Land.get_or_none(model.Land.name == args.name)
+        if land is None:
+            print('Land "%s" not found' % args.name)
+        else:
+            if args.type in valid_types:
+                core.export_tags(land, args.type, minimum_relevance)
+                return 1
+            print('Invalid export type "%s" [%s]' % (args.type, ', '.join(valid_types)))
+        return 0
 
 
 class HeuristicController:

@@ -169,6 +169,14 @@ type = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf', 'mediacsv']
 [venv/bin/]$ python mywi.py land export --name=LAND_NAME --type=EXPORT_TYPE --minrel=MINIMUM_RELEVANCE
 ```
 
+### Export tags
+
+type = ['matrix', 'content']
+
+```bash
+[venv/bin/]$ python mywi.py tag export --name=LAND_NAME --type=EXPORT_TYPE --minrel=MINIMUM_RELEVANCE
+```
+
 ### Print land properties
 
 ```bash

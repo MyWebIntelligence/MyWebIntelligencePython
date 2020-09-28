@@ -14,7 +14,6 @@ class Export:
     Export class
     """
     gexf_ns = {None: 'http://www.gexf.net/1.2draft', 'viz': 'http://www.gexf.net/1.1draft/viz'}
-    types = ['pagecsv', 'fullpagecsv', 'nodecsv', 'pagegexf', 'nodegexf', 'mediacsv']
     type = None
     land = None
     relevance = 1
@@ -418,3 +417,92 @@ class Export:
         """
         cols = ",\n".join(["{1} AS {0}".format(*i) for i in column_map.items()])
         return model.DB.execute_sql(sql.format(cols), (self.land.get_id(), self.relevance))
+
+    def export_tags(self, filename):
+        if self.type == 'matrix':
+            sql = """
+            WITH RECURSIVE tagPath AS (
+                SELECT id,
+                       name
+                FROM tag
+                WHERE parent_id IS NULL
+                UNION ALL
+                SELECT t.id,
+                       p.name || '_' || t.name
+                FROM tagPath AS p
+                JOIN tag AS t ON p.id = t.parent_id
+            )
+            SELECT tc.expression_id,
+                   tp.name AS path,
+                   COUNT(*) AS content
+            FROM tag AS t
+            JOIN tagPath AS tp ON tp.id = t.id
+            JOIN taggedcontent tc ON tc.tag_id = t.id
+            JOIN expression e ON e.id = tc.expression_id
+            WHERE t.land_id = ?
+                AND e.relevance >= ?
+            GROUP BY tc.expression_id, path
+            ORDER BY tc.expression_id, t.parent_id, t.sorting
+            """
+
+            cursor = model.DB.execute_sql(sql, (self.land.get_id(), self.relevance))
+
+            tags = []
+            rows = []
+
+            for row in cursor:
+                if row[1] not in tags:
+                    tags.append(row[1])
+                rows.append(row)
+            default_matrix = dict(zip(tags, [0] * len(tags)))
+
+            expression_id = None
+            matrix = {}
+
+            for row in rows:
+                if row[0] != expression_id:
+                    expression_id = row[0]
+                    matrix[expression_id] = default_matrix.copy()
+                matrix[expression_id][row[1]] = row[2]
+
+            with open(filename, 'w', newline='\n', encoding="utf-8") as file:
+                writer = csv.writer(file, quoting=csv.QUOTE_ALL)
+                writer.writerow(['expression_id'] + tags)
+                for (expression_id, data) in matrix.items():
+                    writer.writerow([expression_id] + list(data.values()))
+                return 1
+        elif self.type == 'content':
+            sql = """
+            WITH RECURSIVE tagPath AS (
+                SELECT id,
+                       name
+                FROM tag
+                WHERE parent_id IS NULL
+                UNION ALL
+                SELECT t.id,
+                       p.name || '_' || t.name
+                FROM tagPath AS p
+                JOIN tag AS t ON p.id = t.parent_id
+            )
+            SELECT
+                tp.name AS path,
+                tc.text AS content,
+                tc.expression_id
+            FROM taggedcontent AS tc
+            JOIN tag AS t ON t.id = tc.tag_id
+            JOIN tagPath AS tp ON tp.id = t.id
+            JOIN expression AS e ON e.id = tc.expression_id
+            WHERE t.land_id = ?
+                AND e.relevance >= ?
+            ORDER BY t.parent_id, t.sorting
+            """
+
+            cursor = model.DB.execute_sql(sql, (self.land.get_id(), self.relevance))
+
+            with open(filename, 'w', newline='\n', encoding="utf-8") as file:
+                writer = csv.writer(file, quoting=csv.QUOTE_ALL)
+                writer.writerow(['path', 'content', 'expression_id'])
+                for row in cursor:
+                    writer.writerow(row)
+                return 1
+        return 0
