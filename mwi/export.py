@@ -60,14 +60,18 @@ class Export:
             'domain_id': 'e.domain_id',
             'domain_name': 'd.name',
             'domain_description': 'd.description',
-            'domain_keywords': 'd.keywords'
+            'domain_keywords': 'd.keywords',
+            'tags': 'GROUP_CONCAT(DISTINCT t.name)'
         }
         sql = """
             SELECT
                 {}
             FROM expression AS e
             JOIN domain AS d ON d.id = e.domain_id
-            WHERE land_id = ? AND relevance >= ?
+            LEFT JOIN taggedcontent tc ON tc.expression_id = e.id
+            LEFT JOIN tag t ON t.id = tc.tag_id
+            WHERE e.land_id = ? AND relevance >= ?
+            GROUP BY e.id
         """
         cursor = self.get_sql_cursor(sql, col_map)
         return self.write_csv(filename, col_map.keys(), cursor)
@@ -90,14 +94,18 @@ class Export:
             'domain_id': 'e.domain_id',
             'domain_name': 'd.name',
             'domain_description': 'd.description',
-            'domain_keywords': 'd.keywords'
+            'domain_keywords': 'd.keywords',
+            'tags': 'GROUP_CONCAT(DISTINCT t.name)'
         }
         sql = """
             SELECT
                 {}
             FROM expression AS e
             JOIN domain AS d ON d.id = e.domain_id
-            WHERE land_id = ? AND relevance >= ?
+            LEFT JOIN taggedcontent tc ON tc.expression_id = e.id
+            LEFT JOIN tag t ON t.id = tc.tag_id
+            WHERE e.land_id = ? AND relevance >= ?
+            GROUP BY e.id
         """
         cursor = self.get_sql_cursor(sql, col_map)
         return self.write_csv(filename, col_map.keys(), cursor)
