@@ -95,9 +95,8 @@ C:\Users\some_user\project_folder> venv\Scripts\activate
 
 ```bash
  [venv/bin/MyWebIntelligencePython]$ pip install -r requirements.txt
-```
 
-# Usage
+```
 
 ## Setup Database
 
@@ -105,6 +104,16 @@ C:\Users\some_user\project_folder> venv\Scripts\activate
 [venv/bin/]$ python mywi.py db setup
 ```
 Create database (warning, destroys any previous data). 
+
+# Usage
+
+## Enter in Docker Container
+
+Execute interactive shell on the container
+
+```bash
+$ docker exec -it mwi bash
+``` 
 
 ## Lands
 
