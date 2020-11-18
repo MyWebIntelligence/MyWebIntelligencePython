@@ -46,65 +46,15 @@ Create database if it does not exist
 
 Or use commands described in [Usage](#usage)
 
-# Install development environment
-
-## Prerequisites (Python+Pip+Virtualenv+Git)
-
-Install python (on Windows https://www.python.org/downloads/release/python-374/) and/or pip (on windows https://pip.pypa.io/en/stable/installing/) if needed
-
-Install virtualenv (https://virtualenv.pypa.io/en/stable/userguide/) if needed
-
-```bash
-$ pip install virtualenv
-```
-
-Install the git My Web intelligence Repository (on windows https://git-scm.com/ AND https://www.atlassian.com/git/tutorials/install-git#windows)
-
-```bash
-$ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
-```
-
-
-## Activate your Virtual Environment
-
-Change to application directory, create virtual env then activate
-
-FOR MAC
-
-Create an instance in the current directory
-```bash
-$ virtualenv venv
-```
-Activate your virtual env
-```bash
-$ source venv/bin/activate
-```
-
-FOR WINDOWS
-Create an instance in the current directory
-```bash
-$ python -m venv C:\Users\some_user\project_folder\venv
-```
-
-Activate your virtual env
-```bash
-C:\Users\some_user\project_folder> venv\Scripts\activate
-```
-
-## Install dependencies
-
-```bash
- [venv/bin/MyWebIntelligencePython]$ pip install -r requirements.txt
-```
-
 # Usage
 
-## Setup Database
+## Enter in Docker Container
+
+Execute interactive shell on the container
 
 ```bash
-[venv/bin/]$ python mywi.py db setup
-```
-Create database (warning, destroys any previous data). 
+$ docker exec -it mwi bash
+``` 
 
 ## Lands
 
@@ -198,3 +148,62 @@ type = ['matrix', 'content']
 ```bash
 [venv/bin/]$ python mywi.py heuristic update
 ```
+
+# Install development environment
+
+## Prerequisites (Python+Pip+Virtualenv+Git)
+
+Install python (on Windows https://www.python.org/downloads/release/python-374/) and/or pip (on windows https://pip.pypa.io/en/stable/installing/) if needed
+
+Install virtualenv (https://virtualenv.pypa.io/en/stable/userguide/) if needed
+
+```bash
+$ pip install virtualenv
+```
+
+Install the git My Web intelligence Repository (on windows https://git-scm.com/ AND https://www.atlassian.com/git/tutorials/install-git#windows)
+
+```bash
+$ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
+```
+
+
+## Activate your Virtual Environment
+
+Change to application directory, create virtual env then activate
+
+FOR MAC
+
+Create an instance in the current directory
+```bash
+$ virtualenv venv
+```
+Activate your virtual env
+```bash
+$ source venv/bin/activate
+```
+
+FOR WINDOWS
+Create an instance in the current directory
+```bash
+$ python -m venv C:\Users\some_user\project_folder\venv
+```
+
+Activate your virtual env
+```bash
+C:\Users\some_user\project_folder> venv\Scripts\activate
+```
+
+## Install dependencies
+
+```bash
+ [venv/bin/MyWebIntelligencePython]$ pip install -r requirements.txt
+
+```
+
+## Setup Database
+
+```bash
+[venv/bin/]$ python mywi.py db setup
+```
+Create database (warning, destroys any previous data). 
