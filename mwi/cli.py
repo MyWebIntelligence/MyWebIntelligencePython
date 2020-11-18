@@ -64,7 +64,12 @@ def command_input():
                         const=0)
     parser.add_argument('--minrel',
                         type=int,
-                        help='Set minimum relevance threshold for exports',
+                        help='Set minimum relevance threshold',
+                        nargs='?',
+                        const=0)
+    parser.add_argument('--maxrel',
+                        type=int,
+                        help='Set maximum relevance threshold',
                         nargs='?',
                         const=0)
     parser.add_argument('--http',
@@ -89,14 +94,14 @@ def dispatch(args):
             'crawl': DomainController.crawl
         },
         'land': {
-            'list':    LandController.list,
-            'create':  LandController.create,
-            'delete':  LandController.delete,
-            'crawl':   LandController.crawl,
-            'export':  LandController.export,
-            'addterm': LandController.addterm,
-            'addurl':  LandController.addurl,
-            'props':   LandController.properties
+            'list':     LandController.list,
+            'create':   LandController.create,
+            'delete':   LandController.delete,
+            'crawl':    LandController.crawl,
+            'readable': LandController.readable,
+            'export':   LandController.export,
+            'addterm':  LandController.addterm,
+            'addurl':   LandController.addurl,
         },
         'tag': {
             'export': TagController.export,

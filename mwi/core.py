@@ -1,19 +1,22 @@
 """
 Core functions
 """
+import asyncio
+import json
 import re
+from argparse import Namespace
 from os import path
 from typing import Union
-from argparse import Namespace
 from urllib.parse import urlparse
-import requests
+
 import aiohttp
-import asyncio
 import nltk
-from nltk.tokenize import word_tokenize
-from nltk.stem.snowball import FrenchStemmer
+import requests
 from bs4 import BeautifulSoup
-from peewee import IntegrityError, JOIN
+from nltk.stem.snowball import FrenchStemmer
+from nltk.tokenize import word_tokenize
+from peewee import IntegrityError, JOIN, SQL
+
 import settings
 from . import model
 from .export import Export
@@ -176,12 +179,11 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
         tasks = []
         for expression in list(expressions):
             tasks.append(crawl_expression(expression, session))
-
         results = await asyncio.gather(*tasks)
         return expressions.count(), expressions.count() - sum(results)
 
 
-async def crawl_expression(expression, session):
+async def crawl_expression(expression: model.Expression, session: aiohttp.ClientSession):
     print("Crawling %s" % expression.url)
     result = 0
     expression.http_status = '000'
@@ -203,6 +205,35 @@ async def crawl_expression(expression, session):
     except Exception:
         expression.save()
         return result
+
+
+async def readable_land(land: model.Land, limit: int = 0):
+    words = get_land_dictionary(land)
+    expressions = model.Expression.select()
+    if limit > 0:
+        expressions = expressions.limit(limit)
+    expressions = expressions.where(model.Expression.land == land)
+    expressions = expressions.order_by(SQL('relevance').desc())
+    tasks = []
+    for expression in list(expressions):
+        tasks.append(mercury_readable(expression, words))
+    results = await asyncio.gather(*tasks)
+    return expressions.count(), expressions.count() - sum(results)
+
+
+async def mercury_readable(expression: model.Expression, words):
+    print("Getting readable from mercury-parser %s" % expression.url)
+    proc = await asyncio.create_subprocess_shell(
+        'mercury-parser %s --format=markdown' % expression.url,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
+    data = json.loads(stdout.decode())
+    expression.readable = data['content']
+    expression.relevance = expression_relevance(words, expression)
+    expression.save()
+    return 1
 
 
 def add_expression(land: model.Land, url: str, depth=0) -> Union[model.Expression, bool]:
@@ -415,14 +446,20 @@ def expression_relevance(dictionary, expression: model.Expression) -> int:
     :return:
     """
     lemmas = [w.lemma for w in dictionary]
-    occurrences = []
+    title_relevance = []
+    content_relevance = []
+
     try:
+        title = [stem_word(w) for w in word_tokenize(expression.title, language='french')]
+        title = " ".join(title)
+        title_relevance = [title.count(lemma) * 10 for lemma in lemmas]
+
         content = [stem_word(w) for w in word_tokenize(expression.readable, language='french')]
         content = " ".join(content)
-        occurrences = [content.count(lemma) for lemma in lemmas]
+        content_relevance = [content.count(lemma) for lemma in lemmas]
     except:
         pass
-    return sum(occurrences)
+    return sum(title_relevance) + sum(content_relevance)
 
 
 def export_land(land: model.Land, export_type: str, minimum_relevance: int):

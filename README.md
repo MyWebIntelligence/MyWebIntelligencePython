@@ -116,8 +116,10 @@ Create database (warning, destroys any previous data).
 
 ### List created lands
 
+Optional name to get properties of one land
+
 ```bash
-[venv/bin/]$ python mywi.py land list
+[venv/bin/]$ python mywi.py land list [--name=LAND_NAME]
 ```
 
 ### Add terms to land
@@ -139,8 +141,10 @@ Path argument must point to a file containing one URL per line, file extension d
 
 ### Delete land
 
+Set optional maxrel parameter to only delete expressions with relevance lower than MAXIMUM_RELEVANCE 
+
 ```bash
-[venv/bin/]$ python mywi.py land delete --name=LAND_NAME
+[venv/bin/]$ python mywi.py land delete --name=LAND_NAME [--maxrel=MAXIMUM_RELEVANCE]
 ```
 
 ### Crawl land urls
@@ -150,6 +154,18 @@ To re crawl pages in error (503 for example), set the http status code with `--h
 
 ```bash
 [venv/bin/]$ python mywi.py land crawl --name=LAND_NAME [--limit=LIMIT, --http=HTTP_STATUS]
+```
+
+### Fetch land readable
+
+Get land expressions readable from Mercury Parser if installed.
+To install Mercury Parser with CLI binary :
+```bash
+$ yarn global add @postlight/mercury-parser
+``` 
+
+```bash
+[venv/bin/]$ python mywi.py land readable --name=LAND_NAME [--limit=LIMIT]
 ```
 
 ### Crawl domains
@@ -175,12 +191,6 @@ type = ['matrix', 'content']
 
 ```bash
 [venv/bin/]$ python mywi.py tag export --name=LAND_NAME --type=EXPORT_TYPE --minrel=MINIMUM_RELEVANCE
-```
-
-### Print land properties
-
-```bash
-[venv/bin/]$ python mywi.py land properties --name=LAND_NAME
 ```
 
 ### Update domains from heuristic settings

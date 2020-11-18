@@ -1,10 +1,13 @@
 """
 Application controller
 """
-import settings
-import os
-from peewee import JOIN, fn
 import asyncio
+import os
+import sys
+
+from peewee import JOIN, fn
+
+import settings
 from . import core
 from . import model
 
@@ -52,14 +55,28 @@ class LandController:
             .join(model.Expression, JOIN.LEFT_OUTER) \
             .group_by(model.Land.name) \
             .order_by(model.Land.name)
+
+        name = core.get_arg_option('name', args, set_type=str, default=None)
+        if name is not None:
+            lands = lands.where(model.Land.name == name)
+
         if lands.count() > 0:
             for land in lands:
-                exp_stats = model.Expression \
+                select = model.Expression \
                     .select(fn.COUNT(model.Expression.id).alias('num')) \
                     .join(model.Land) \
                     .where((model.Expression.land == land)
                            & (model.Expression.fetched_at.is_null()))
-                to_crawl = [s.num for s in exp_stats]
+                remaining_to_crawl = [s.num for s in select]
+
+                select = model.Expression \
+                    .select(model.Expression.http_status, fn.COUNT(model.Expression.http_status).alias('num')) \
+                    .where((model.Expression.land == land)
+                           & (model.Expression.fetched_at.is_null(False))) \
+                    .group_by(model.Expression.http_status) \
+                    .order_by(model.Expression.http_status)
+                http_statuses = ["%s: %s" % (s.http_status, s.num) for s in select]
+
                 print("%s - (%s)\n\t%s" % (
                     land.name,
                     land.created_at.strftime("%B %d %Y %H:%M"),
@@ -69,7 +86,10 @@ class LandController:
                     [d.word.term for d in land.words]))
                 print("\t%s expressions in land (%s remaining to crawl)" % (
                     land.expressions.count(),
-                    to_crawl[0]))
+                    remaining_to_crawl[0]))
+                print("\tStatus codes: %s" % (
+                    " - ".join(http_statuses)))
+                print("\n")
             return 1
         print("No land created")
         return 0
@@ -142,10 +162,19 @@ class LandController:
         :return:
         """
         core.check_args(args, 'name')
-        if core.confirm("Land and underlying objects will be deleted, type 'Y' to proceed : "):
+        maxrel = core.get_arg_option('maxrel', args, set_type=int, default=0)
+
+        if core.confirm("Land and/or underlying objects will be deleted, type 'Y' to proceed : "):
             land = model.Land.get(model.Land.name == args.name)
-            land.delete_instance(recursive=True)
-            print("Land %s deleted" % args.name)
+            if maxrel > 0:
+                query = model.Expression.delete().where((model.Expression.land == land)
+                                                & (model.Expression.relevance < maxrel)
+                                                & (model.Expression.fetched_at.is_null(False)))
+                query.execute()
+                print("Expressions deleted")
+            else:
+                land.delete_instance(recursive=True)
+                print("Land %s deleted" % args.name)
             return 1
         return 0
 
@@ -174,6 +203,29 @@ class LandController:
         return 0
 
     @staticmethod
+    def readable(args: core.Namespace):
+        """
+        Fetch readable from Mercury Parser for expressions in land
+        :param args:
+        :return:
+        """
+        core.check_args(args, 'name')
+        fetch_limit = core.get_arg_option('limit', args, set_type=int, default=0)
+        if fetch_limit > 0:
+            print('Fetch limit set to %s URLs' % fetch_limit)
+        land = model.Land.get_or_none(model.Land.name == args.name)
+        if land is None:
+            print('Land "%s" not found' % args.name)
+        else:
+            if sys.platform == 'win32':
+                asyncio.set_event_loop(asyncio.ProactorEventLoop())
+            loop = asyncio.get_event_loop()
+            results = loop.run_until_complete(core.readable_land(land, fetch_limit))
+            print("%d expressions processed (%d errors)" % results)
+            return 1
+        return 0
+
+    @staticmethod
     def export(args: core.Namespace):
         """
         Export land
@@ -197,17 +249,6 @@ class LandController:
                 return 1
             print('Invalid export type "%s" [%s]' % (args.type, ', '.join(valid_types)))
         return 0
-
-    @staticmethod
-    def properties(args: core.Namespace):
-        """
-        Land properties
-        :param args:
-        :return:
-        """
-        core.check_args(args, 'name')
-        print("Land properties")
-        return 1
 
 
 class DomainController:
