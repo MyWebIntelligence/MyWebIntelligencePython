@@ -1,4 +1,4 @@
-data_location = './data'
+data_location = '../data'
 
 archive = False
 

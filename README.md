@@ -29,7 +29,7 @@ $ docker build -t mwi:1.0 .
 Then run image with mounted data directory
 
 ```bash
-$ docker run -dit --name mwi -v /path/to/hosted/mywi/data:/app/data mwi:1.0
+$ docker run -dit --name mwi -v /path/to/hosted/data:/data mwi:1.0
 ```
 
 Next, execute interactive shell on the container

@@ -184,6 +184,11 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
 
 
 async def crawl_expression(expression: model.Expression, session: aiohttp.ClientSession):
+    """
+    :param expression:
+    :param session:
+    :return:
+    """
     print("Crawling %s" % expression.url)
     result = 0
     expression.http_status = '000'
@@ -208,6 +213,11 @@ async def crawl_expression(expression: model.Expression, session: aiohttp.Client
 
 
 async def readable_land(land: model.Land, limit: int = 0):
+    """
+    :param land:
+    :param limit:
+    :return:
+    """
     words = get_land_dictionary(land)
     expressions = model.Expression.select()
     if limit > 0:
@@ -222,6 +232,11 @@ async def readable_land(land: model.Land, limit: int = 0):
 
 
 async def mercury_readable(expression: model.Expression, words):
+    """
+    :param expression:
+    :param words:
+    :return:
+    """
     print("Getting readable from mercury-parser %s" % expression.url)
     proc = await asyncio.create_subprocess_shell(
         'mercury-parser %s --format=markdown' % expression.url,
@@ -233,7 +248,23 @@ async def mercury_readable(expression: model.Expression, words):
     expression.readable = data['content']
     expression.relevance = expression_relevance(words, expression)
     expression.save()
+
+    links = extract_md_links(data['content'])
+    model.ExpressionLink.delete().where(model.ExpressionLink.source == expression.id)
+    for link in links:
+        link_expression(expression.land, expression, link)
+
     return 1
+
+
+def extract_md_links(md_content: str):
+    """
+    Extract URLs from Markdown content
+    :param md_content:
+    :return:
+    """
+    matches = re.findall(r'\(((https?|ftp)://[^\s/$.?#].[^\s]*)\)', md_content)
+    return [match[0] for match in matches]
 
 
 def add_expression(land: model.Land, url: str, depth=0) -> Union[model.Expression, bool]:
