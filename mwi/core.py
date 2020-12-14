@@ -174,7 +174,7 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
             model.Expression.fetched_at.is_null())
     expressions = expressions.order_by(model.Expression.depth)
 
-    connector = aiohttp.TCPConnector(limit=settings.parallel_connections, verify_ssl=False)
+    connector = aiohttp.TCPConnector(limit=settings.parallel_connections, ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = []
         for expression in list(expressions):
@@ -222,7 +222,10 @@ async def readable_land(land: model.Land, limit: int = 0):
     expressions = model.Expression.select()
     if limit > 0:
         expressions = expressions.limit(limit)
-    expressions = expressions.where(model.Expression.land == land)
+    expressions = expressions.where(
+        model.Expression.land == land,
+        model.Expression.readable_at.is_null()
+    )
     expressions = expressions.order_by(SQL('relevance').desc())
     tasks = []
     for expression in list(expressions):
@@ -244,15 +247,24 @@ async def mercury_readable(expression: model.Expression, words):
         stderr=asyncio.subprocess.PIPE
     )
     stdout, stderr = await proc.communicate()
-    data = json.loads(stdout.decode())
-    expression.readable = data['content']
-    expression.relevance = expression_relevance(words, expression)
-    expression.save()
 
-    links = extract_md_links(data['content'])
-    model.ExpressionLink.delete().where(model.ExpressionLink.source == expression.id)
-    for link in links:
-        link_expression(expression.land, expression, link)
+    try:
+        data = json.loads(stdout.decode())
+    except ValueError:
+        return 0
+
+    if len(data['content']) > 100:
+        expression.readable = data['content']
+        expression.readable_at = model.datetime.datetime.now()
+        expression.relevance = expression_relevance(words, expression)
+        expression.save()
+
+        links = extract_md_links(data['content'])
+        model.ExpressionLink.delete().where(model.ExpressionLink.source == expression.id)
+        for link in links:
+            link_expression(expression.land, expression, link)
+    else:
+        return 0
 
     return 1
 
@@ -503,7 +515,7 @@ def export_land(land: model.Land, export_type: str, minimum_relevance: int):
     """
     date_tag = model.datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     filename = path.join(settings.data_location, 'export_land_%s_%s_%s') \
-        % (land.name, export_type, date_tag)
+               % (land.name, export_type, date_tag)
     export = Export(export_type, land, minimum_relevance)
     count = export.write(export_type, filename)
     if count > 0:
@@ -515,7 +527,7 @@ def export_land(land: model.Land, export_type: str, minimum_relevance: int):
 def export_tags(land: model.Land, export_type: str, minimum_relevance: int):
     date_tag = model.datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     filename = path.join(settings.data_location, 'export_tags_%s_%s_%s.csv') \
-        % (land.name, export_type, date_tag)
+               % (land.name, export_type, date_tag)
     export = Export(export_type, land, minimum_relevance)
     res = export.export_tags(filename)
     if res == 1:

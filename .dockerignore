@@ -6,7 +6,9 @@ README.md
 LICENSE
 .vscode
 .idea
+.coverage
 
 data
 venv
-__pycache__
+**/*.pyc
+**/__pycache__

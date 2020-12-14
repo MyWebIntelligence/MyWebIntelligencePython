@@ -5,8 +5,16 @@ Core Model definition
 from os import path
 import settings
 import datetime
-from peewee import SqliteDatabase, Model, CharField, TextField, \
-    DateTimeField, ForeignKeyField, IntegerField, CompositeKey
+from peewee import (
+    SqliteDatabase,
+    Model,
+    CharField,
+    TextField,
+    DateTimeField,
+    ForeignKeyField,
+    IntegerField,
+    CompositeKey
+)
 
 DB = SqliteDatabase(path.join(settings.data_location, 'mwi.db'))
 
@@ -62,6 +70,7 @@ class Expression(BaseModel):
     published_at = DateTimeField(null=True)
     fetched_at = DateTimeField(null=True)
     approved_at = DateTimeField(null=True)
+    readable_at = DateTimeField(null=True)
     relevance = IntegerField(null=True)
     depth = IntegerField(null=True)
 

@@ -2,12 +2,13 @@
 Command Line Interface
 """
 import argparse
-from .controller import \
-    DbController, \
-    DomainController, \
-    LandController, \
-    HeuristicController, \
+from .controller import (
+    DbController,
+    DomainController,
+    LandController,
+    HeuristicController,
     TagController
+)
 
 
 def command_run(args: dict):

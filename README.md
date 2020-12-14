@@ -7,6 +7,7 @@ A Sqlite database browser like https://sqlitebrowser.org/ may be useful.
 
 ## Requirements
 
+* Python 3.6
 * [Docker](https://www.docker.com/products/docker-desktop)
 
 ## Installation
@@ -207,3 +208,14 @@ C:\Users\some_user\project_folder> venv\Scripts\activate
 [venv/bin/]$ python mywi.py db setup
 ```
 Create database (warning, destroys any previous data). 
+
+# Tests
+
+```
+> pytest tests/<testfile.py>[::<test_method>]
+```
+
+Example testing unique method :
+
+`pytest tests/test_cli.py::test_functional_test`
+

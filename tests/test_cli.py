@@ -58,7 +58,7 @@ def test_functional_test():
         {'object': 'land', 'verb': 'addurl', 'land': land_name, 'path': '../data/asthme-50.txt', 'urls': None},
         {'object': 'land', 'verb': 'list'},
         {'object': 'land', 'verb': 'crawl', 'name': land_name, 'limit': 2},
-        {'object': 'land', 'verb': 'readable', 'name': land_name, 'limit': 2},
+        {'object': 'land', 'verb': 'readable', 'name': land_name, 'limit': 1},
         {'object': 'domain', 'verb': 'crawl', 'limit': 2},
         {'object': 'land', 'verb': 'export', 'name': land_name, 'type': 'pagecsv', 'minrel': 1},
         {'object': 'land', 'verb': 'export', 'name': land_name, 'type': 'fullpagecsv', 'minrel': 1},
