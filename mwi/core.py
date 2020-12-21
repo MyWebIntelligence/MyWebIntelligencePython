@@ -161,35 +161,40 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
     :return:
     """
     print("Crawling land %d" % land.id)
-    expressions = model.Expression.select()
+    dictionary = get_land_dictionary(land)
+    expressions = model.Expression.select().where(model.Expression.land == land)
+
+    if http is not None:
+        expressions = expressions.where(model.Expression.http_status == http)
+    else:
+        expressions = expressions.where(model.Expression.fetched_at.is_null())
+
     if limit > 0:
         expressions = expressions.limit(limit)
-    if http is not None:
-        expressions = expressions.where(
-            model.Expression.land == land,
-            model.Expression.http_status == http)
-    else:
-        expressions = expressions.where(
-            model.Expression.land == land,
-            model.Expression.fetched_at.is_null())
+
     expressions = expressions.order_by(model.Expression.depth)
 
     connector = aiohttp.TCPConnector(limit=settings.parallel_connections, ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
+        num_expressions = 0
         tasks = []
-        for expression in list(expressions):
-            tasks.append(crawl_expression(expression, session))
+
+        for expression in expressions:
+            num_expressions += 1
+            tasks.append(crawl_expression(expression, dictionary, session))
         results = await asyncio.gather(*tasks)
-        return expressions.count(), expressions.count() - sum(results)
+
+        return num_expressions, num_expressions - sum(results)
 
 
-async def crawl_expression(expression: model.Expression, session: aiohttp.ClientSession):
+async def crawl_expression(expression: model.Expression, dictionary, session: aiohttp.ClientSession):
     """
     :param expression:
+    :param dictionary:
     :param session:
     :return:
     """
-    print("Crawling %s" % expression.url)
+    print("Crawling expression %s" % expression.url)
     result = 0
     expression.http_status = '000'
     expression.fetched_at = model.datetime.datetime.now()
@@ -203,12 +208,14 @@ async def crawl_expression(expression: model.Expression, session: aiohttp.Client
             expression.http_status = response.status
             if ('html' in response.headers['content-type']) and (response.status == 200):
                 content = await response.text()
-                process_expression_content(expression, content)
+                process_expression_content(expression, content, dictionary)
                 result = 1
             expression.save()
+            print("Saving expression #%s" % expression.id)
             return result
     except Exception:
         expression.save()
+        print("Saving expression #%s" % expression.id)
         return result
 
 
@@ -261,6 +268,7 @@ async def mercury_readable(expression: model.Expression, words):
 
         links = extract_md_links(data['content'])
         model.ExpressionLink.delete().where(model.ExpressionLink.source == expression.id)
+        print("Linking %d expression to #%s" % (len(links), expression.id))
         for link in links:
             link_expression(expression.land, expression, link)
     else:
@@ -333,16 +341,15 @@ def link_expression(land: model.Land, source_expression: model.Expression, url: 
     :param url:
     :return:
     """
-    with model.DB.atomic():
-        target_expression = add_expression(land, url, source_expression.depth + 1)
-        if target_expression:
-            try:
-                model.ExpressionLink.create(
-                    source_id=source_expression.get_id(),
-                    target_id=target_expression.get_id())
-                return True
-            except IntegrityError:
-                pass
+    target_expression = add_expression(land, url, source_expression.depth + 1)
+    if target_expression:
+        try:
+            model.ExpressionLink.create(
+                source_id=source_expression.get_id(),
+                target_id=target_expression.get_id())
+            return True
+        except IntegrityError:
+            pass
     return False
 
 
@@ -366,15 +373,16 @@ def is_crawlable(url: str):
         return False
 
 
-def process_expression_content(expression: model.Expression, html: str) -> model.Expression:
+def process_expression_content(expression: model.Expression, html: str, dictionary) -> model.Expression:
     """
     Process expression fields from HTML content
     :param expression:
     :param html:
+    :param dictionary:
     :return:
     """
+    print("Processing expression #%s" % expression.id)
     soup = BeautifulSoup(html, 'html.parser')
-    words = get_land_dictionary(expression.land)
 
     if soup.html is not None:
         expression.lang = soup.html.get('lang', '')
@@ -393,7 +401,7 @@ def process_expression_content(expression: model.Expression, html: str) -> model
         html_file.close()
 
     expression.readable = get_readable(soup)
-    expression.relevance = expression_relevance(words, expression)
+    expression.relevance = expression_relevance(dictionary, expression)
 
     if expression.relevance > 0:
         print("Expression #%d approved" % expression.get_id())
@@ -401,19 +409,21 @@ def process_expression_content(expression: model.Expression, html: str) -> model
         expression.approved_at = model.datetime.datetime.now()
         if expression.depth < 3:
             urls = [a.get('href') for a in soup.find_all('a') if is_crawlable(a.get('href'))]
+            print("Linking %d expression to #%s" % (len(urls), expression.id))
             for url in urls:
                 link_expression(expression.land, expression, url)
 
     return expression
 
 
-def extract_medias(content, expression):
+def extract_medias(content, expression: model.Expression):
     """
     Extract media src (img, video) from html content
     :param content:
     :param expression:
     :return:
     """
+    print("Extracting media from #%s" % expression.id)
     medias = []
     for tag in ['img', 'video', 'audio']:
         for element in content.find_all(tag):

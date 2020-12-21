@@ -48,7 +48,14 @@ class LandController:
         :param args:
         :return:
         """
-        lands = model.Land.select() \
+        lands = model.Land.select(
+            model.Land.id,
+            model.Land.name,
+            model.Land.created_at,
+            model.Land.description,
+            fn.GROUP_CONCAT(model.Word.term.distinct()).alias('words'),
+            fn.COUNT(model.Expression.id.distinct()).alias('num_all')
+        ) \
             .join(model.LandDictionary, JOIN.LEFT_OUTER) \
             .join(model.Word, JOIN.LEFT_OUTER) \
             .switch(model.Land) \
@@ -62,6 +69,8 @@ class LandController:
 
         if lands.count() > 0:
             for land in lands:
+                words = [w for w in land.words.split(',')]
+
                 select = model.Expression \
                     .select(fn.COUNT(model.Expression.id).alias('num')) \
                     .join(model.Land) \
@@ -70,7 +79,9 @@ class LandController:
                 remaining_to_crawl = [s.num for s in select]
 
                 select = model.Expression \
-                    .select(model.Expression.http_status, fn.COUNT(model.Expression.http_status).alias('num')) \
+                    .select(
+                        model.Expression.http_status,
+                        fn.COUNT(model.Expression.http_status).alias('num')) \
                     .where((model.Expression.land == land)
                            & (model.Expression.fetched_at.is_null(False))) \
                     .group_by(model.Expression.http_status) \
@@ -82,10 +93,10 @@ class LandController:
                     land.created_at.strftime("%B %d %Y %H:%M"),
                     land.description))
                 print("\t%s terms in land dictionary %s" % (
-                    land.words.count(),
-                    [d.word.term for d in land.words]))
+                    len(words),
+                    words))
                 print("\t%s expressions in land (%s remaining to crawl)" % (
-                    land.expressions.count(),
+                    land.num_all,
                     remaining_to_crawl[0]))
                 print("\tStatus codes: %s" % (
                     " - ".join(http_statuses)))

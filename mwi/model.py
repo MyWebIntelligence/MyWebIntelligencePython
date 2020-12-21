@@ -16,7 +16,13 @@ from peewee import (
     CompositeKey
 )
 
-DB = SqliteDatabase(path.join(settings.data_location, 'mwi.db'))
+DB = SqliteDatabase(path.join(settings.data_location, 'mwi.db'), pragmas={
+    'journal_mode': 'wal',
+    'cache_size': -1 * 512000,
+    'foreign_keys': 1,
+    'ignore_check_constrains': 0,
+    'synchronous': 0
+})
 
 
 class BaseModel(Model):
@@ -44,7 +50,7 @@ class Domain(BaseModel):
     """
     Domain model
     """
-    name = CharField()
+    name = CharField(unique=True)
     http_status = CharField(max_length=3, null=True)
     title = TextField(null=True)
     description = TextField(null=True)
@@ -58,9 +64,9 @@ class Expression(BaseModel):
     Expression model
     """
     land = ForeignKeyField(Land, backref='expressions', on_delete='CASCADE')
-    url = TextField()
+    url = TextField(index=True)
     domain = ForeignKeyField(Domain, backref='expressions')
-    http_status = CharField(max_length=3, null=True)
+    http_status = CharField(max_length=3, null=True, index=True)
     lang = CharField(max_length=10, null=True)
     title = CharField(null=True)
     description = TextField(null=True)
@@ -68,9 +74,9 @@ class Expression(BaseModel):
     readable = TextField(null=True)
     created_at = DateTimeField(default=datetime.datetime.now)
     published_at = DateTimeField(null=True)
-    fetched_at = DateTimeField(null=True)
+    fetched_at = DateTimeField(null=True, index=True)
     approved_at = DateTimeField(null=True)
-    readable_at = DateTimeField(null=True)
+    readable_at = DateTimeField(null=True, index=True)
     relevance = IntegerField(null=True)
     depth = IntegerField(null=True)
 
