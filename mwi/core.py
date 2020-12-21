@@ -260,7 +260,7 @@ async def mercury_readable(expression: model.Expression, words):
     except ValueError:
         return 0
 
-    if len(data['content']) > 100:
+    if 'content' in data and len(data['content']) > 100:
         expression.readable = data['content']
         expression.readable_at = model.datetime.datetime.now()
         expression.relevance = expression_relevance(words, expression)
