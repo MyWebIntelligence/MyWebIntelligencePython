@@ -161,9 +161,10 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
     :return:
     """
     print("Crawling land %d" % land.id)
+    batch_size = settings.parallel_connections
     dictionary = get_land_dictionary(land)
-    expressions = model.Expression.select().where(model.Expression.land == land)
 
+    expressions = model.Expression.select().where(model.Expression.land == land)
     if http is not None:
         expressions = expressions.where(model.Expression.http_status == http)
     else:
@@ -172,19 +173,25 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
     if limit > 0:
         expressions = expressions.limit(limit)
 
-    expressions = expressions.order_by(model.Expression.depth)
+    expression_count = expressions.count()
+    batch_count = -(-expression_count//batch_size)
+    last_batch_size = expression_count % batch_size
+    current_offset = 0
+    processed_count = 0
 
-    connector = aiohttp.TCPConnector(limit=settings.parallel_connections, ssl=False)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        num_expressions = 0
-        tasks = []
-
-        for expression in expressions:
-            num_expressions += 1
-            tasks.append(crawl_expression(expression, dictionary, session))
-        results = await asyncio.gather(*tasks)
-
-        return num_expressions, num_expressions - sum(results)
+    for current_batch in range(batch_count):
+        print("Batch %s/%s" % (current_batch+1, batch_count))
+        batch_limit = last_batch_size if (current_batch+1 == batch_count and last_batch_size != 0) else batch_size
+        expressions = expressions.limit(batch_limit).offset(current_offset).order_by(model.Expression.depth)
+        connector = aiohttp.TCPConnector(limit=settings.parallel_connections, ssl=False)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            tasks = []
+            for expression in expressions:
+                tasks.append(crawl_expression(expression, dictionary, session))
+            results = await asyncio.gather(*tasks)
+            processed_count += sum(results)
+        current_offset += batch_size
+    return expression_count, expression_count - processed_count
 
 
 async def crawl_expression(expression: model.Expression, dictionary, session: aiohttp.ClientSession):
@@ -248,6 +255,8 @@ async def mercury_readable(expression: model.Expression, words):
     :return:
     """
     print("Getting readable from mercury-parser %s" % expression.url)
+    expression.readable_at = model.datetime.datetime.now()
+
     proc = await asyncio.create_subprocess_shell(
         'mercury-parser %s --format=markdown' % expression.url,
         stdout=asyncio.subprocess.PIPE,
@@ -262,7 +271,6 @@ async def mercury_readable(expression: model.Expression, words):
 
     if 'content' in data and len(data['content']) > 100:
         expression.readable = data['content']
-        expression.readable_at = model.datetime.datetime.now()
         expression.relevance = expression_relevance(words, expression)
         expression.save()
 
@@ -563,3 +571,8 @@ def update_heuristic():
             expression.save()
             updated += 1
     print("%d domain(s) updated" % updated)
+
+
+def delete_media(land: model.Land, max_width: int = 0, max_height: int = 0, max_size: int = 0):
+    expressions = model.Expression.select().where(model.Land == land)
+    model.Media.delete().where(model.Media.expression << expressions)
