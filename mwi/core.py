@@ -161,7 +161,6 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
     :return:
     """
     print("Crawling land %d" % land.id)
-    batch_size = settings.parallel_connections
     dictionary = get_land_dictionary(land)
 
     expressions = model.Expression.select().where(model.Expression.land == land)
@@ -174,6 +173,7 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
         expressions = expressions.limit(limit)
 
     expression_count = expressions.count()
+    batch_size = settings.parallel_connections
     batch_count = -(-expression_count//batch_size)
     last_batch_size = expression_count % batch_size
     current_offset = 0
@@ -240,12 +240,26 @@ async def readable_land(land: model.Land, limit: int = 0):
         model.Expression.land == land,
         model.Expression.readable_at.is_null()
     )
-    expressions = expressions.order_by(SQL('relevance').desc())
-    tasks = []
-    for expression in list(expressions):
-        tasks.append(mercury_readable(expression, words))
-    results = await asyncio.gather(*tasks)
-    return expressions.count(), expressions.count() - sum(results)
+
+    expression_count = expressions.count()
+    batch_size = settings.parallel_connections
+    batch_count = -(-expression_count//batch_size)
+    last_batch_size = expression_count % batch_size
+    current_offset = 0
+    processed_count = 0
+
+    for current_batch in range(batch_count):
+        print("Batch %s/%s" % (current_batch+1, batch_count))
+        batch_limit = last_batch_size if (current_batch+1 == batch_count and last_batch_size != 0) else batch_size
+        expressions = expressions.limit(batch_limit).offset(current_offset).order_by(SQL('relevance').desc())
+
+        tasks = []
+        for expression in expressions:
+            tasks.append(mercury_readable(expression, words))
+        results = await asyncio.gather(*tasks)
+        processed_count += sum(results)
+        current_offset += batch_size
+    return expression_count, expression_count - processed_count
 
 
 async def mercury_readable(expression: model.Expression, words):
