@@ -132,7 +132,8 @@ class LandController:
         else:
             for term in core.split_arg(args.terms):
                 with model.DB.atomic():
-                    word, _ = model.Word.get_or_create(term=term, lemma=core.stem_word(term))
+                    lemma = ' '.join([core.stem_word(w) for w in term.split(' ')])
+                    word, _ = model.Word.get_or_create(term=term, lemma=lemma)
                     model.LandDictionary.create(land=land.get_id(), word=word.get_id())
                     print('Term "%s" created in land %s' % (term, args.land))
             core.land_relevance(land)
