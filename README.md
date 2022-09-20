@@ -24,13 +24,13 @@ $ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
 Inside project directory `$ cd mywi`, build Docker image
 
 ```bash
-$ docker build -t mwi:1.0 .
+$ docker build -t mwi:1.2 .
 ```
 
 Then run image with mounted data directory
 
 ```bash
-$ docker run -dit --name mwi -v /path/to/hosted/data:/data mwi:1.0
+$ docker run -dit --name mwi -v /path/to/hosted/data:/data mwi:1.2
 ```
 
 Next, execute interactive shell on the container
