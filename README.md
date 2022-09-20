@@ -7,7 +7,7 @@ A Sqlite database browser like https://sqlitebrowser.org/ may be useful.
 
 ## Requirements
 
-* Python 3.6
+* Python 3.10
 * [Docker](https://www.docker.com/products/docker-desktop)
 
 ## Installation

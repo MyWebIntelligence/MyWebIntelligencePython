@@ -521,17 +521,17 @@ def expression_relevance(dictionary, expression: model.Expression) -> int:
     :return:
     """
     lemmas = [w.lemma for w in dictionary]
-    title_relevance = []
-    content_relevance = []
+    title_relevance = [0]
+    content_relevance = [0]
+
+    def get_relevance(text, weight) -> list:
+        stems = [stem_word(w) for w in word_tokenize(text, language='french')]
+        stemmed_text = " ".join(stems)
+        return [sum(weight for _ in re.finditer(r'\b%s\b' % re.escape(lemma), stemmed_text)) for lemma in lemmas]
 
     try:
-        title = [stem_word(w) for w in word_tokenize(expression.title, language='french')]
-        title = " ".join(title)
-        title_relevance = [title.count(lemma) * 10 for lemma in lemmas]
-
-        content = [stem_word(w) for w in word_tokenize(expression.readable, language='french')]
-        content = " ".join(content)
-        content_relevance = [content.count(lemma) for lemma in lemmas]
+        title_relevance = get_relevance(expression.title, 1)
+        content_relevance = get_relevance(expression.readable, 10)
     except:
         pass
     return sum(title_relevance) + sum(content_relevance)
