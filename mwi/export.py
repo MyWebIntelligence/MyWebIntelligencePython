@@ -5,7 +5,11 @@ Contains custom SQL to be exported in specified file formats
 
 import csv
 import datetime
+import re
+from textwrap import dedent
+import unicodedata
 from lxml import etree
+from zipfile import ZipFile
 from . import model
 
 
@@ -41,7 +45,19 @@ class Export:
             filename += '.csv'
         elif export_type.endswith('gexf'):
             filename += '.gexf'
+        elif export_type.endswith('corpus'):
+            filename += '.zip'
         return call_write(filename)
+
+    def get_sql_cursor(self, sql, column_map):
+        """
+        Build SQL query to execution, returning an iterable cursor
+        :param sql:
+        :param column_map:
+        :return:
+        """
+        cols = ",\n".join(["{1} AS {0}".format(*i) for i in column_map.items()])
+        return model.DB.execute_sql(sql.format(cols), (self.land.get_id(), self.relevance))
 
     def write_pagecsv(self, filename) -> int:
         """
@@ -416,16 +432,6 @@ class Export:
                 'target': str(values[1]),
                 'weight': str(values[2])})
 
-    def get_sql_cursor(self, sql, column_map):
-        """
-        Build SQL query to execution, returning an iterable cursor
-        :param sql:
-        :param column_map:
-        :return:
-        """
-        cols = ",\n".join(["{1} AS {0}".format(*i) for i in column_map.items()])
-        return model.DB.execute_sql(sql.format(cols), (self.land.get_id(), self.relevance))
-
     def export_tags(self, filename):
         if self.type == 'matrix':
             sql = """
@@ -514,3 +520,73 @@ class Export:
                     writer.writerow(row)
                 return 1
         return 0
+
+    def write_corpus(self, filename) -> int:
+        """
+        Write CSV file
+        :param filename:
+        :return:
+        """
+        col_map = {
+            'id': 'e.id',
+            'url': 'e.url',
+            'title': 'e.title',
+            'description': 'e.description',
+            'readable': 'e.readable',
+            'domain': 'd.name',
+        }
+        sql = """
+            SELECT
+                {}
+            FROM expression AS e
+            JOIN domain AS d ON d.id = e.domain_id
+            LEFT JOIN taggedcontent tc ON tc.expression_id = e.id
+            LEFT JOIN tag t ON t.id = tc.tag_id
+            WHERE e.land_id = ? AND relevance >= ?
+            GROUP BY e.id
+        """
+
+        cursor = self.get_sql_cursor(sql, col_map)
+        count = 0
+
+        with ZipFile(filename, 'w') as arch:
+            for row in cursor:
+                count += 1
+                row = dict(zip(col_map.keys(), row))
+                filename = '{}-{}.txt'.format(row.get('id'), self.slugify(row.get('title', '')))
+                data = self.to_metadata(row) + row.get('readable', '')
+                arch.writestr(filename, data)
+        arch.close()
+
+        return count
+
+    def slugify(self, string):
+        slug = unicodedata.normalize('NFKD', string)
+        slug = str(slug.encode('ascii', 'ignore').lower())
+        slug = re.sub(r'[^a-z0-9]+', '-', slug).strip('-')
+
+        return re.sub(r'[-]+', '-', slug)
+
+    def to_metadata(self, row) -> str:
+        metadata = """\
+            ---
+            Title: "{title}"
+            Creator: ""
+            Contributor: ""
+            Coverage: ""
+            Date: ""
+            Description: "{description}"
+            Subject: ""
+            Type: ""
+            Format: ""
+            Identifier: "{id}"
+            Language: ""
+            Publisher: "{domain}"
+            Relation: ""
+            Rights: ""
+            Source: "{url}"
+            ---
+        """.format(title=row.get('title'), description=row.get('description'),
+                   id=row.get('id'), domain=row.get('domain'), url=row.get('url'))
+
+        return dedent(metadata)

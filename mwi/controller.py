@@ -246,7 +246,8 @@ class LandController:
         """
         minimum_relevance = 1
         core.check_args(args, ('name', 'type'))
-        valid_types = ['pagecsv', 'fullpagecsv', 'nodecsv', 'pagegexf', 'nodegexf', 'mediacsv']
+        valid_types = ['pagecsv', 'fullpagecsv', 'nodecsv', 'pagegexf',
+                       'nodegexf', 'mediacsv', 'corpus']
 
         if isinstance(args.minrel, int) and (args.minrel >= 0):
             minimum_relevance = args.minrel

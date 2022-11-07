@@ -21,7 +21,13 @@ Clone project
 $ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
 ```
 
-Inside project directory `$ cd mywi`, build Docker image
+Inside project directory, edit your local (and persistent) data directory in `settings.py` file 
+
+```python
+data_location = "/path/to/hosted/data"
+```
+
+Then build Docker image
 
 ```bash
 $ docker build -t mwi:1.2 .
@@ -130,7 +136,7 @@ To re crawl domains in error (503 for example), set the http status code with `-
 
 ### Export land
 
-type = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf', 'mediacsv']
+type = ['pagecsv', 'pagegexf', 'fullpagecsv', 'nodecsv', 'nodegexf', 'mediacsv', 'corpus']
 
 ```bash
 [venv/bin/]$ python mywi.py land export --name=LAND_NAME --type=EXPORT_TYPE --minrel=MINIMUM_RELEVANCE
