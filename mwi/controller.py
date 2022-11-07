@@ -69,7 +69,10 @@ class LandController:
 
         if lands.count() > 0:
             for land in lands:
-                words = [w for w in land.words.split(',')]
+                if land.words is not None:
+                    words = [w for w in land.words.split(',')]
+                else:
+                    words = []
 
                 select = model.Expression \
                     .select(fn.COUNT(model.Expression.id).alias('num')) \
