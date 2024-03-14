@@ -178,6 +178,13 @@ $ git clone https://github.com/MyWebIntelligence/MyWebIntelligencePython.git
 ## Activate your Virtual Environment
 
 Change to application directory, create virtual env then activate
+AND
+Inside project directory, edit your local (and persistent) data directory in `settings.py` file 
+
+```python
+data_location = "/path/to/hosted/data"
+```
+
 
 FOR MAC
 
