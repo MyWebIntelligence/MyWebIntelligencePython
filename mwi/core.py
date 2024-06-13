@@ -530,8 +530,8 @@ def expression_relevance(dictionary, expression: model.Expression) -> int:
         return [sum(weight for _ in re.finditer(r'\b%s\b' % re.escape(lemma), stemmed_text)) for lemma in lemmas]
 
     try:
-        title_relevance = get_relevance(expression.title, 1)
-        content_relevance = get_relevance(expression.readable, 10)
+        title_relevance = get_relevance(expression.title, 10)
+        content_relevance = get_relevance(expression.readable, 1)
     except:
         pass
     return sum(title_relevance) + sum(content_relevance)
