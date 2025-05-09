@@ -77,6 +77,11 @@ def command_input():
                         type=str,
                         help='Limit crawling to specific http status (re crawling)',
                         nargs='?')
+    parser.add_argument('--lang',
+                        type=str,
+                        help='Language of the project (default: fr)',
+                        default='fr',
+                        nargs='?')
     args = parser.parse_args()
     dispatch(args)
 

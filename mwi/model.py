@@ -43,6 +43,7 @@ class Land(BaseModel):
     """
     name = CharField(unique=True)
     description = TextField()
+    lang = CharField(max_length=10, default='fr')
     created_at = DateTimeField(default=datetime.datetime.now)
 
 

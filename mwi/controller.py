@@ -116,7 +116,7 @@ class LandController:
         :return:
         """
         core.check_args(args, ('name', 'desc'))
-        land = model.Land.create(name=args.name, description=args.desc)
+        land = model.Land.create(name=args.name, description=args.desc, lang=args.lang)
         os.makedirs(os.path.join(settings.data_location, 'lands/%s') % land.get_id(), exist_ok=True)
         print('Land "%s" created' % args.name)
         return 1

@@ -53,11 +53,11 @@ def test_functional_test():
     letters = string.ascii_lowercase
     land_name = 'test_' + ''.join(random.choice(letters) for i in range(6))
     commands = [
-        {'object': 'land', 'verb': 'create', 'name': land_name, 'desc': 'Test'},
-        {'object': 'land', 'verb': 'addterm', 'land': land_name, 'terms': 'asthme, asthmatique, jeune, enfant, adolescent, nourrisson, bébé, nouveau-né'},
-        {'object': 'land', 'verb': 'addurl', 'land': land_name, 'path': '../data/asthme-50.txt', 'urls': None},
-        {'object': 'land', 'verb': 'list'},
-        {'object': 'land', 'verb': 'crawl', 'name': land_name, 'limit': 2},
+            {'object': 'land', 'verb': 'create', 'name': land_name, 'desc': 'Test'},
+            {'object': 'land', 'verb': 'addterm', 'land': land_name, 'terms': 'asthme, asthmatique, jeune, enfant, adolescent, nourrisson, bébé, nouveau-né'},
+            {'object': 'land', 'verb': 'addurl', 'land': land_name, 'path': 'data/asthme-50.txt', 'urls': None},
+            {'object': 'land', 'verb': 'list'},
+            {'object': 'land', 'verb': 'crawl', 'name': land_name, 'limit': 2},
         {'object': 'land', 'verb': 'readable', 'name': land_name, 'limit': 1},
         {'object': 'domain', 'verb': 'crawl', 'limit': 2},
         {'object': 'land', 'verb': 'export', 'name': land_name, 'type': 'pagecsv', 'minrel': 1},
