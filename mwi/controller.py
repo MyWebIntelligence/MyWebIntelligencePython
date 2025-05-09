@@ -165,6 +165,7 @@ class LandController:
             for url in urls:
                 if core.add_expression(land, url):
                     urls_count += 1
+                    print(f"Added URL: {url} to land {args.land}")
             print('%s URLs created in land %s' % (urls_count, args.land))
             return 1
         return 0
