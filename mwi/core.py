@@ -626,7 +626,7 @@ async def mercury_readable(expression: model.Expression, words):
         downloaded = await asyncio.to_thread(fetch_url, expression.url)
         if downloaded:
             raw_html = downloaded
-            content = extract(downloaded, include_links=True, include_comments=False)
+            content = extract(downloaded, include_links=True, include_comments=False, output_format='markdown')
             if content:
                 links = extract_md_links(content)
                 expression.readable = f"<!-- TRAFILATURA CONTENT -->\n{content}"
@@ -668,7 +668,7 @@ async def mercury_readable(expression: model.Expression, words):
                 from trafilatura import fetch_url, extract
                 downloaded = await asyncio.to_thread(fetch_url, archived_url)
                 if downloaded:
-                    content = extract(downloaded)
+                    content = extract(downloaded, output_format='markdown')
                     if content:
                         expression.readable = f"<!-- ARCHIVED CONTENT -->\n{content}"
                         print(f"Archive.org succeeded for {expression.url}")
