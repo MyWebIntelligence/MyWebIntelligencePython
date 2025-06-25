@@ -197,35 +197,35 @@ def crawl_domains(limit: int = 0, http: str = None):
         if not html_content:
             print(f"Attempting direct requests for {domain.name}")
             urls_to_try = [domain_url_https, domain_url_http]
-            for current_url_to_try in urls_to_try:
-                try:
-                    response = requests.get(
-                        current_url_to_try,
-                        headers={"User-Agent": settings.user_agent},
-                        timeout=settings.default_timeout,
-                        allow_redirects=True # Allow redirects to find the final page
-                    )
-                    final_status_code = str(response.status_code)
-                    effective_url = response.url # URL after redirects
+        for current_url_to_try in urls_to_try:
+            try:
+                response = requests.get(
+                    current_url_to_try,
+                    headers={"User-Agent": settings.user_agent},
+                    timeout=settings.default_timeout,
+                    allow_redirects=True # Allow redirects to find the final page
+                )
+                final_status_code = str(response.status_code)
+                effective_url = response.url # URL after redirects
 
-                    if response.ok and 'text/html' in response.headers.get('Content-Type', '').lower():
-                        html_content = response.text
-                        source_method = "REQUESTS"
-                        print(f"Direct request success for {domain.name} (URL: {effective_url}, Status: {final_status_code})")
-                        break # Success, no need to try other URL
-                    else:
-                        print(f"Direct request for {current_url_to_try} failed or not HTML. Status: {final_status_code}, Content-Type: {response.headers.get('Content-Type')}")
-                        if response.ok and not ('text/html' in response.headers.get('Content-Type', '').lower()):
-                             final_status_code = "REQ_NO_HTML" # Mark as non-HTML success
-                except requests.exceptions.Timeout:
-                    print(f"Direct request timeout for {current_url_to_try}")
-                    final_status_code = "ERR_REQ_TO"
-                except requests.exceptions.RequestException as e_req:
-                    print(f"Direct request exception for {current_url_to_try}: {e_req}")
-                    final_status_code = "ERR_REQ" # General request error
-                except Exception as e_direct: # Catch any other unexpected errors
-                    print(f"Direct request general exception for {current_url_to_try}: {e_direct}")
-                    final_status_code = "ERR_UNKNOWN"
+                if response.ok and 'text/html' in response.headers.get('Content-Type', '').lower():
+                    html_content = response.text
+                    source_method = "REQUESTS"
+                    print(f"Direct request success for {domain.name} (URL: {effective_url}, Status: {final_status_code})")
+                    break # Success, no need to try other URL
+                else:
+                    print(f"Direct request for {current_url_to_try} failed or not HTML. Status: {final_status_code}, Content-Type: {response.headers.get('Content-Type')}")
+                    if response.ok and not ('text/html' in response.headers.get('Content-Type', '').lower()):
+                         final_status_code = "REQ_NO_HTML" # Mark as non-HTML success
+            except requests.exceptions.Timeout:
+                print(f"Direct request timeout for {current_url_to_try}")
+                final_status_code = "000"
+            except requests.exceptions.RequestException as e_req:
+                print(f"Direct request exception for {current_url_to_try}: {e_req}")
+                final_status_code = "000"
+            except Exception as e_direct: # Catch any other unexpected errors
+                print(f"Direct request general exception for {current_url_to_try}: {e_direct}")
+                final_status_code = "ERR_UNKNOWN"
             if not html_content and not final_status_code: # If all attempts failed without setting a status
                 final_status_code = "ERR_ALL_FAILED"
 
@@ -458,36 +458,66 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
     print("Crawling land %d" % land.id)
     dictionary = get_land_dictionary(land)
 
-    expressions = model.Expression.select().where(
-        model.Expression.land == land,
-        model.Expression.readable.is_null(True) | (model.Expression.readable == '')
-    )
-    if http is not None:
-        expressions = expressions.where(model.Expression.http_status == http)
+    # Get distinct depths in ascending order for expressions not yet fetched or matching http filter
+    if http is None:
+        depths_query = model.Expression.select(model.Expression.depth).where(
+            model.Expression.land == land,
+            model.Expression.fetched_at.is_null(True)
+        ).distinct().order_by(model.Expression.depth)
+    else:
+        depths_query = model.Expression.select(model.Expression.depth).where(
+            model.Expression.land == land,
+            model.Expression.http_status == http
+        ).distinct().order_by(model.Expression.depth)
 
-    if limit > 0:
-        expressions = expressions.limit(limit)
+    total_processed = 0
+    total_errors = 0
 
-    expression_count = expressions.count()
-    batch_size = settings.parallel_connections
-    batch_count = -(-expression_count//batch_size)
-    last_batch_size = expression_count % batch_size
-    current_offset = 0
-    processed_count = 0
+    for depth_record in depths_query:
+        current_depth = depth_record.depth
+        print(f"Processing depth {current_depth}")
 
-    for current_batch in range(batch_count):
-        print("Batch %s/%s" % (current_batch+1, batch_count))
-        batch_limit = last_batch_size if (current_batch+1 == batch_count and last_batch_size != 0) else batch_size
-        expressions = expressions.limit(batch_limit).offset(current_offset).order_by(model.Expression.depth)
-        connector = aiohttp.TCPConnector(limit=settings.parallel_connections, ssl=False)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            tasks = []
-            for expression in expressions:
-                tasks.append(crawl_expression(expression, dictionary, session))
-            results = await asyncio.gather(*tasks)
-            processed_count += sum(results)
-        current_offset += batch_size
-    return expression_count, expression_count - processed_count
+        if http is None:
+            expressions = model.Expression.select().where(
+                model.Expression.land == land,
+                model.Expression.fetched_at.is_null(True),
+                model.Expression.depth == current_depth
+            )
+        else:
+            expressions = model.Expression.select().where(
+                model.Expression.land == land,
+                model.Expression.http_status == http,
+                model.Expression.depth == current_depth
+            )
+
+        expression_count = expressions.count()
+        if expression_count == 0:
+            continue
+
+        batch_size = settings.parallel_connections
+        batch_count = -(-expression_count // batch_size)
+        last_batch_size = expression_count % batch_size
+        current_offset = 0
+
+        for current_batch in range(batch_count):
+            print(f"Batch {current_batch + 1}/{batch_count} for depth {current_depth}")
+            batch_limit = last_batch_size if (current_batch + 1 == batch_count and last_batch_size != 0) else batch_size
+            current_expressions = expressions.limit(batch_limit).offset(current_offset)
+
+            connector = aiohttp.TCPConnector(limit=settings.parallel_connections, ssl=False)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                tasks = [crawl_expression(expr, dictionary, session) for expr in current_expressions]
+                results = await asyncio.gather(*tasks)
+                processed_in_batch = sum(results)
+                total_processed += processed_in_batch
+                total_errors += (batch_limit - processed_in_batch)
+
+            current_offset += batch_size
+
+            if limit > 0 and total_processed >= limit:
+                return total_processed, total_errors
+
+    return total_processed, total_errors
 
 
 async def crawl_expression(expression: model.Expression, dictionary, session: aiohttp.ClientSession):
@@ -556,7 +586,7 @@ async def crawl_expression(expression: model.Expression, dictionary, session: ai
             
     except aiohttp.ClientError as e_aio:
         print(f"AIOHTTP ClientError for {expression.url}: {str(e_aio)}")
-        expression.http_status = 'ERR_AIO' # Custom status for aiohttp errors
+        expression.http_status = '000' # Replaced ERR_AIO with '000' code as requested
     except requests.exceptions.RequestException as e_req:
         print(f"Requests Exception for {expression.url} (likely during archive.org): {str(e_req)}")
         expression.http_status = 'ERR_REQ' # Custom status for requests errors
