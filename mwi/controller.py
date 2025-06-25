@@ -181,7 +181,10 @@ class LandController:
         maxrel = core.get_arg_option('maxrel', args, set_type=int, default=0)
 
         if core.confirm("Land and/or underlying objects will be deleted, type 'Y' to proceed : "):
-            land = model.Land.get(model.Land.name == args.name)
+            land = model.Land.get_or_none(model.Land.name == args.name)
+            if land is None:
+                print('Land "%s" not found' % args.name)
+                return 0
             if maxrel > 0:
                 query = model.Expression.delete().where((model.Expression.land == land)
                                                 & (model.Expression.relevance < maxrel)

@@ -22,10 +22,74 @@ MyWebIntelligence (MyWI) is a Python-based tool designed to assist researchers i
 
 *   **Land Creation & Management**: Organize your research into "lands," which are thematic collections of terms and URLs.
 *   **Web Crawling**: Crawl URLs associated with your lands to gather web page content.
-*   **Content Extraction**: Process crawled pages to extract readable content (requires Mercury Parser).
+*   **Content Extraction**: Process crawled pages to extract readable content.
 *   **Domain Analysis**: Gather information about domains encountered during crawling.
 *   **Data Export**: Export collected data in various formats (CSV, GEXF, raw corpus) for further analysis.
 *   **Tag-based Analysis**: Export tag matrices and content for deeper insights.
+
+---
+
+## Architecture & Internals
+
+### File Structure & Flow
+
+```
+mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.py
+                                     ↘︎ mwi/model.py (Peewee ORM)
+```
+
+- **mywi.py**: Console entry-point, runs CLI.
+- **mwi/cli.py**: Parses CLI args, dispatches commands to controllers.
+- **mwi/controller.py**: Maps verbs to business logic in core/export/model.
+- **mwi/core.py**: Main algorithms (crawling, parsing, pipelines, scoring, etc.).
+- **mwi/export.py**: Exporters (CSV, GEXF, corpus).
+- **mwi/model.py**: Database schema (Peewee ORM).
+
+### Database Schema (SQLite, via Peewee)
+
+- **Land**: Research project/topic.
+- **Word**: Normalized vocabulary.
+- **LandDictionary**: Many-to-many Land/Word.
+- **Domain**: Unique website/domain.
+- **Expression**: Individual URL/page.
+- **ExpressionLink**: Directed link between Expressions.
+- **Media**: Images, videos, audio in Expressions.
+- **Tag**: Hierarchical tags.
+- **TaggedContent**: Snippets tagged in Expressions.
+
+### Main Workflows
+
+- **Project Bootstrap**: `python mywi.py db setup`
+- **Land Life-Cycle**: Create, add terms, add URLs, crawl, extract readable, export, clean/delete.
+- **Domain Processing**: `python mywi.py domain crawl`
+- **Tag Export**: `python mywi.py tag export`
+- **Heuristics Update**: `python mywi.py heuristic update`
+
+### Implementation Notes
+
+- **Relevance Score**: Weighted sum of lemma hits in title/content.
+- **Async Batching**: Polite concurrency for crawling.
+- **Media Extraction**: Only `.jpg` images kept, media saved for later download.
+- **Export**: Multiple formats, dynamic SQL, GEXF with attributes.
+
+### Settings
+
+Key variables in `settings.py`:
+- `data_location`, `user_agent`, `parallel_connections`, `default_timeout`, `archive`, `heuristics`.
+
+### Testing
+
+- `tests/test_cli.py`: CLI smoke tests.
+- `tests/test_core.py`, etc.: Unit tests for extraction, parsing, export.
+
+### Extending
+
+- Add export: implement `Export.write_<type>`, update controller.
+- Change language: pass `--lang` at land creation.
+- Add headers/proxy: edit `settings` or patch session logic.
+- Custom tags: use tag hierarchy, export flattens to paths.
+
+---
 
 ## Installation
 
@@ -162,118 +226,244 @@ You are now ready to use MyWI commands as described in the [Usage](#usage) secti
 
 A "Land" is a central concept in MyWI, representing a specific research area or topic.
 
-**1. Create a New Land:**
+#### 1. Create a New Land
+
+Create a new land (research topic/project).
+
 ```bash
 python mywi.py land create --name="MyResearchTopic" --desc="A description of this research topic"
 ```
 
-**2. List Created Lands:**
-To list all lands:
+| Option      | Type   | Required | Default | Description                                 |
+|-------------|--------|----------|---------|---------------------------------------------|
+| --name      | str    | Yes      |         | Name of the land (unique identifier)        |
+| --desc      | str    | No       |         | Description of the land                     |
+| --lang      | str    | No       | fr      | Language code for the land (default: fr)    |
+
+**Example:**
 ```bash
-python mywi.py land list
-```
-To get properties of a specific land:
-```bash
-python mywi.py land list --name="MyResearchTopic"
+python mywi.py land create --name="AsthmaResearch" --desc="Research on asthma and air quality" --lang="en"
 ```
 
-**3. Add Terms to a Land:**
-Terms are keywords relevant to your land.
+---
+
+#### 2. List Created Lands
+
+List all lands or show properties of a specific land.
+
+- List all lands:
+  ```bash
+  python mywi.py land list
+  ```
+- Show details for a specific land:
+  ```bash
+  python mywi.py land list --name="MyResearchTopic"
+  ```
+
+| Option   | Type | Required | Default | Description                      |
+|----------|------|----------|---------|----------------------------------|
+| --name   | str  | No       |         | Name of the land to show details |
+
+---
+
+#### 3. Add Terms to a Land
+
+Add keywords or phrases to a land.
+
 ```bash
 python mywi.py land addterm --land="MyResearchTopic" --terms="keyword1, keyword2, related phrase"
 ```
 
-**4. Add URLs to a Land:**
-You can add URLs directly or from a file.
+| Option   | Type | Required | Default | Description                                 |
+|----------|------|----------|---------|---------------------------------------------|
+| --land   | str  | Yes      |         | Name of the land to add terms to            |
+| --terms  | str  | Yes      |         | Comma-separated list of terms/keywords      |
 
-*   Directly:
-    ```bash
-    python mywi.py land addurl --land="MyResearchTopic" --urls="https://example.com/page1, https://anothersite.org/article"
-    ```
-*   From a file (one URL per line):
-    ```bash
-    python mywi.py land addurl --land="MyResearchTopic" --path="/path/to/your/url_list.txt"
-    ```
-    (If using Docker, ensure this file is accessible within the container, e.g., in your mounted data volume).
+---
 
-**5. Delete a Land (or parts of it):**
-To delete an entire land:
-```bash
-python mywi.py land delete --name="MyResearchTopic"
-```
-To delete expressions within a land with relevance lower than a specific value:
-```bash
-python mywi.py land delete --name="MyResearchTopic" --maxrel=MAXIMUM_RELEVANCE 
-# e.g., --maxrel=0.5
-```
+#### 4. Add URLs to a Land
+
+Add URLs to a land, either directly or from a file.
+
+- Directly:
+  ```bash
+  python mywi.py land addurl --land="MyResearchTopic" --urls="https://example.com/page1, https://anothersite.org/article"
+  ```
+- From a file (one URL per line):
+  ```bash
+  python mywi.py land addurl --land="MyResearchTopic" --path="/path/to/your/url_list.txt"
+  ```
+  *(If using Docker, ensure this file is accessible within the container, e.g., in your mounted data volume.)*
+
+| Option   | Type | Required | Default | Description                                 |
+|----------|------|----------|---------|---------------------------------------------|
+| --land   | str  | Yes      |         | Name of the land to add URLs to             |
+| --urls   | str  | No       |         | Comma-separated list of URLs to add         |
+| --path   | str  | No       |         | Path to a file containing URLs (one per line) |
+
+---
+
+#### 5. Delete a Land or Expressions
+
+Delete an entire land or only expressions below a relevance threshold.
+
+- Delete an entire land:
+  ```bash
+  python mywi.py land delete --name="MyResearchTopic"
+  ```
+- Delete expressions with relevance lower than a specific value:
+  ```bash
+  python mywi.py land delete --name="MyResearchTopic" --maxrel=MAXIMUM_RELEVANCE
+  # e.g., --maxrel=0.5
+  ```
+
+| Option   | Type   | Required | Default | Description                                         |
+|----------|--------|----------|---------|-----------------------------------------------------|
+| --name   | str    | Yes      |         | Name of the land to delete                          |
+| --maxrel | float  | No       |         | Only delete expressions with relevance < maxrel      |
+
 
 ### Data Collection
 
-**1. Crawl Land URLs:**
+#### 1. Crawl Land URLs
+
 Crawl the URLs added to a land to fetch their content.
+
 ```bash
 python mywi.py land crawl --name="MyResearchTopic" [--limit=NUMBER] [--http=HTTP_STATUS_CODE]
 ```
-*   `--limit`: Optional. Number of URLs to crawl in this run.
-*   `--http`: Optional. Re-crawl pages that previously resulted in a specific HTTP error (e.g., `503`).
 
-**2. Fetch Readable Content (Mercury Parser):**
-Extracts a cleaner, more readable version of the crawled page content.
-**Requires Mercury Parser CLI.** Install it globally via Yarn:
+| Option   | Type   | Required | Default | Description                                                                 |
+|----------|--------|----------|---------|-----------------------------------------------------------------------------|
+| --name   | str    | Yes      |         | Name of the land whose URLs to crawl                                        |
+| --limit  | int    | No       |         | Maximum number of URLs to crawl in this run                                 |
+| --http   | str    | No       |         | Re-crawl only pages that previously resulted in this HTTP error (e.g., 503) |
+
+**Examples:**
 ```bash
-yarn global add @postlight/mercury-parser 
-# This command should be run on the system where mywi.py is executed 
-# (i.e., inside the Docker container or on your local machine with venv).
+python mywi.py land crawl --name="AsthmaResearch"
+python mywi.py land crawl --name="AsthmaResearch" --limit=10
+python mywi.py land crawl --name="AsthmaResearch" --http=503
 ```
-Then, run the MyWI command:
+
+---
+
+#### 2. Fetch Readable Content
+
+Extract a cleaner, more readable version of the crawled page content (requires Mercury Parser CLI).
+
 ```bash
 python mywi.py land readable --name="MyResearchTopic" [--limit=NUMBER]
 ```
 
+| Option   | Type   | Required | Default | Description                                         |
+|----------|--------|----------|---------|-----------------------------------------------------|
+| --name   | str    | Yes      |         | Name of the land to process                         |
+| --limit  | int    | No       |         | Maximum number of pages to process in this run      |
+
+**Examples:**
+```bash
+python mywi.py land readable --name="AsthmaResearch"
+python mywi.py land readable --name="AsthmaResearch" --limit=20
+```
+
 ### Domain Management
 
-**1. Crawl Domains:**
+#### 1. Crawl Domains
+
 Get information from domains that were identified from expressions added to lands.
+
 ```bash
 python mywi.py domain crawl [--limit=NUMBER] [--http=HTTP_STATUS_CODE]
 ```
-*   `--limit`: Optional. Number of domains to crawl.
-*   `--http`: Optional. Re-crawl domains that previously resulted in a specific HTTP error.
+
+| Option   | Type   | Required | Default | Description                                                                 |
+|----------|--------|----------|---------|-----------------------------------------------------------------------------|
+| --limit  | int    | No       |         | Maximum number of domains to crawl in this run                              |
+| --http   | str    | No       |         | Re-crawl only domains that previously resulted in this HTTP error (e.g., 503) |
+
+**Examples:**
+```bash
+python mywi.py domain crawl
+python mywi.py domain crawl --limit=5
+python mywi.py domain crawl --http=404
+```
+
+---
 
 ### Exporting Data
 
-Export data from your lands for analysis in other tools.
+Export data from your lands or tags for analysis in other tools.
 
-**1. Export Land Data:**
+#### 1. Export Land Data
+
+Export data from a land in various formats.
+
 ```bash
 python mywi.py land export --name="MyResearchTopic" --type=EXPORT_TYPE [--minrel=MINIMUM_RELEVANCE]
 ```
-*   `EXPORT_TYPE` can be one of:
-    *   `pagecsv`: CSV of pages.
-    *   `pagegexf`: GEXF graph of pages.
-    *   `fullpagecsv`: CSV with full page content.
-    *   `nodecsv`: CSV of nodes.
-    *   `nodegexf`: GEXF graph of nodes.
-    *   `mediacsv`: CSV of media links.
-    *   `corpus`: Raw text corpus.
-*   `--minrel`: Optional. Minimum relevance for expressions to be included in the export.
 
-**2. Export Tag Data:**
+| Option   | Type   | Required | Default | Description                                                                 |
+|----------|--------|----------|---------|-----------------------------------------------------------------------------|
+| --name   | str    | Yes      |         | Name of the land to export                                                  |
+| --type   | str    | Yes      |         | Export type (see below)                                                     |
+| --minrel | float  | No       |         | Minimum relevance for expressions to be included in the export              |
+
+**EXPORT_TYPE values:**
+- `pagecsv`: CSV of pages
+- `pagegexf`: GEXF graph of pages
+- `fullpagecsv`: CSV with full page content
+- `nodecsv`: CSV of nodes
+- `nodegexf`: GEXF graph of nodes
+- `mediacsv`: CSV of media links
+- `corpus`: Raw text corpus
+
+**Examples:**
+```bash
+python mywi.py land export --name="AsthmaResearch" --type=pagecsv
+python mywi.py land export --name="AsthmaResearch" --type=corpus --minrel=0.7
+```
+
+---
+
+#### 2. Export Tag Data
+
+Export tag-based data for a land.
+
 ```bash
 python mywi.py tag export --name="MyResearchTopic" --type=EXPORT_TYPE [--minrel=MINIMUM_RELEVANCE]
 ```
-*   `EXPORT_TYPE` can be one of:
-    *   `matrix`: Tag co-occurrence matrix.
-    *   `content`: Content associated with tags.
-*   `--minrel`: Optional. Minimum relevance.
+
+| Option   | Type   | Required | Default | Description                                                                 |
+|----------|--------|----------|---------|-----------------------------------------------------------------------------|
+| --name   | str    | Yes      |         | Name of the land whose tags to export                                       |
+| --type   | str    | Yes      |         | Export type (see below)                                                     |
+| --minrel | float  | No       |         | Minimum relevance for tag content to be included in the export              |
+
+**EXPORT_TYPE values:**
+- `matrix`: Tag co-occurrence matrix
+- `content`: Content associated with tags
+
+**Examples:**
+```bash
+python mywi.py tag export --name="AsthmaResearch" --type=matrix
+python mywi.py tag export --name="AsthmaResearch" --type=content --minrel=0.5
+```
+
+---
 
 ### Heuristics
 
-**1. Update Domains from Heuristic Settings:**
-This command likely updates domain information based on predefined or learned heuristics.
+#### 1. Update Domains from Heuristic Settings
+
+Update domain information based on predefined or learned heuristics.
+
 ```bash
 python mywi.py heuristic update
 ```
+
+_No options for this command._
+
 
 ## Testing
 

@@ -9,14 +9,14 @@ from os import path
 from typing import Union
 from urllib.parse import urlparse
 
-import aiohttp
-import nltk
+import aiohttp # type: ignore
+import nltk # type: ignore
 import requests
 from bs4 import BeautifulSoup
-from nltk.stem.snowball import FrenchStemmer
-from nltk.tokenize import word_tokenize
+from nltk.stem.snowball import FrenchStemmer # type: ignore
+from nltk.tokenize import word_tokenize # type: ignore
 from peewee import IntegrityError, JOIN, SQL
-import trafilatura # Added import
+import trafilatura # type: ignore
 
 import settings
 from . import model
@@ -44,11 +44,11 @@ def check_args(args: Namespace, mandatory) -> bool:
     :param mandatory:
     :return:
     """
-    args = vars(args)
+    args_dict = vars(args)
     if isinstance(mandatory, str):
         mandatory = [mandatory]
     for arg in mandatory:
-        if arg not in args or args[arg] is None:
+        if arg not in args_dict or args_dict[arg] is None:
             raise ValueError('Argument "%s" is required' % arg)
     return True
 
@@ -72,9 +72,9 @@ def get_arg_option(name: str, args: Namespace, set_type, default):
     :param default:
     :return:
     """
-    args = vars(args)
-    if (name in args) and (args[name] is not None):
-        return set_type(args[name])
+    args_dict = vars(args)
+    if (name in args_dict) and (args_dict[name] is not None):
+        return set_type(args_dict[name])
     return default
 
 
@@ -84,9 +84,9 @@ def stem_word(word: str) -> str:
     :param word:
     :return:
     """
-    if 'stemmer' not in stem_word.__dict__:
-        stem_word.stemmer = FrenchStemmer()
-    return stem_word.stemmer.stem(word.lower())
+    if 'stemmer' not in stem_word.__dict__: # type: ignore
+        stem_word.stemmer = FrenchStemmer() # type: ignore
+    return str(stem_word.stemmer.stem(word.lower()))
 
 
 def crawl_domains(limit: int = 0, http: str = None):
@@ -197,41 +197,41 @@ def crawl_domains(limit: int = 0, http: str = None):
         if not html_content:
             print(f"Attempting direct requests for {domain.name}")
             urls_to_try = [domain_url_https, domain_url_http]
-        for current_url_to_try in urls_to_try:
-            try:
-                response = requests.get(
-                    current_url_to_try,
-                    headers={"User-Agent": settings.user_agent},
-                    timeout=settings.default_timeout,
-                    allow_redirects=True # Allow redirects to find the final page
-                )
-                final_status_code = str(response.status_code)
-                effective_url = response.url # URL after redirects
+            for current_url_to_try in urls_to_try:
+                try:
+                    response = requests.get(
+                        current_url_to_try,
+                        headers={"User-Agent": settings.user_agent},
+                        timeout=settings.default_timeout,
+                        allow_redirects=True # Allow redirects to find the final page
+                    )
+                    final_status_code = str(response.status_code)
+                    effective_url = response.url # URL after redirects
 
-                if response.ok and 'text/html' in response.headers.get('Content-Type', '').lower():
-                    html_content = response.text
-                    source_method = "REQUESTS"
-                    print(f"Direct request success for {domain.name} (URL: {effective_url}, Status: {final_status_code})")
-                    break # Success, no need to try other URL
-                else:
-                    print(f"Direct request for {current_url_to_try} failed or not HTML. Status: {final_status_code}, Content-Type: {response.headers.get('Content-Type')}")
-                    if response.ok and not ('text/html' in response.headers.get('Content-Type', '').lower()):
-                         final_status_code = "REQ_NO_HTML" # Mark as non-HTML success
-            except requests.exceptions.Timeout:
-                print(f"Direct request timeout for {current_url_to_try}")
-                final_status_code = "000"
-            except requests.exceptions.RequestException as e_req:
-                print(f"Direct request exception for {current_url_to_try}: {e_req}")
-                final_status_code = "000"
-            except Exception as e_direct: # Catch any other unexpected errors
-                print(f"Direct request general exception for {current_url_to_try}: {e_direct}")
-                final_status_code = "ERR_UNKNOWN"
-            if not html_content and not final_status_code: # If all attempts failed without setting a status
-                final_status_code = "ERR_ALL_FAILED"
+                    if response.ok and 'text/html' in response.headers.get('Content-Type', '').lower():
+                        html_content = response.text
+                        source_method = "REQUESTS"
+                        print(f"Direct request success for {domain.name} (URL: {effective_url}, Status: {final_status_code})")
+                        break # Success, no need to try other URL
+                    else:
+                        print(f"Direct request for {current_url_to_try} failed or not HTML. Status: {final_status_code}, Content-Type: {response.headers.get('Content-Type')}")
+                        if response.ok and not ('text/html' in response.headers.get('Content-Type', '').lower()):
+                             final_status_code = "REQ_NO_HTML" # Mark as non-HTML success
+                except requests.exceptions.Timeout:
+                    print(f"Direct request timeout for {current_url_to_try}")
+                    final_status_code = "000"
+                except requests.exceptions.RequestException as e_req:
+                    print(f"Direct request exception for {current_url_to_try}: {e_req}")
+                    final_status_code = "000"
+                except Exception as e_direct: # Catch any other unexpected errors
+                    print(f"Direct request general exception for {current_url_to_try}: {e_direct}")
+                    final_status_code = "ERR_UNKNOWN"
+                if not html_content and not final_status_code: # If all attempts failed without setting a status
+                    final_status_code = "ERR_ALL_FAILED"
 
 
         domain.fetched_at = model.datetime.datetime.now()
-        domain.http_status = final_status_code if final_status_code else "ERR_NO_STATUS"
+        domain.http_status = str(final_status_code) if final_status_code else "ERR_NO_STATUS"
 
         if html_content and source_method:
             try:
@@ -244,7 +244,7 @@ def crawl_domains(limit: int = 0, http: str = None):
         else:
             print(f"Failed to fetch HTML for domain {domain.name} after all attempts. Final status: {domain.http_status}")
             # Ensure some basic info if all fails
-            domain.title = domain.title or f"Website: {domain.name} (Fetch Failed)"
+            domain.title = None # Set to None as per the initial request
 
         try:
             domain.save()
@@ -278,7 +278,7 @@ def process_domain_content(domain: model.Domain, html_content: str, effective_ur
     try:
         # Ensure html_content is not None or empty before passing to trafilatura
         if html_content:
-            meta_object = trafilatura.extract_metadata(html_content) # Removed url=effective_url
+            meta_object = trafilatura.extract_metadata(html_content)
             if meta_object:
                 trafi_title = meta_object.title
                 trafi_description = meta_object.description
@@ -305,12 +305,9 @@ def process_domain_content(domain: model.Domain, html_content: str, effective_ur
           f"  BS: title={bool(bs_title)}, desc={bool(bs_description)}, keyw={bool(bs_keywords)}\n"
           f"  Trafi: title={bool(trafi_title)}, desc={bool(trafi_description)}, tags={bool(trafi_keywords_list)}")
 
-    if final_title:
-        domain.title = final_title.strip() if final_title else None
-    if final_description:
-        domain.description = final_description.strip() if final_description else None
-    if final_keywords_str:
-        domain.keywords = final_keywords_str.strip() if final_keywords_str else None
+    domain.title = str(final_title).strip() if final_title else None # type: ignore
+    domain.description = str(final_description).strip() if final_description else None # type: ignore
+    domain.keywords = str(final_keywords_str).strip() if final_keywords_str else None # type: ignore
     
     # Fallback title if still nothing
     domain.title = domain.title or f"Website: {domain.name}"
@@ -319,7 +316,7 @@ def process_domain_content(domain: model.Domain, html_content: str, effective_ur
           f"description='{(domain.description or '')[:50]}...', keywords='{(domain.keywords or '')[:50]}...'")
 
 
-def get_meta_content(soup: BeautifulSoup, name: str):
+def get_meta_content(soup: BeautifulSoup, name: str) -> str:
     """
     Get named meta content property
     :param soup:
@@ -327,11 +324,12 @@ def get_meta_content(soup: BeautifulSoup, name: str):
     :return:
     """
     tag = soup.find('meta', attrs={'name': name})
-    if tag and 'content' in tag.attrs:
-        content = tag['content'].strip()
-        print(f"Found meta content for {name}: {content[:30]}...")
-        return content
-    return ''
+    if tag and tag.has_attr('content'): # type: ignore
+        content = tag['content'] # type: ignore
+        if isinstance(content, str):
+            print(f"Found meta content for {name}: {content[:30]}...")
+            return content.strip()
+    return ""
 
 
 def extract_metadata(url: str) -> dict:
@@ -370,81 +368,101 @@ def get_title(soup: BeautifulSoup) -> str:
     """
     Get page title with fallback chain
     :param soup: BeautifulSoup object
-    :return: Title string or None if not found
+    :return: Title string or empty string if not found
     """
     # Open Graph title (highest priority)
     og_title = soup.find('meta', attrs={'property': 'og:title'})
-    if og_title and og_title.get('content'):
-        return og_title['content'].strip()
+    if og_title and og_title.has_attr('content'): # type: ignore
+        content = og_title['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
     # Twitter title
     twitter_title = soup.find('meta', attrs={'name': 'twitter:title'})
-    if twitter_title and twitter_title.get('content'):
-        return twitter_title['content'].strip()
+    if twitter_title and twitter_title.has_attr('content'): # type: ignore
+        content = twitter_title['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
     # Schema.org title
     schema_title = soup.find('meta', attrs={'itemprop': 'title'})
-    if schema_title and schema_title.get('content'):
-        return schema_title['content'].strip()
+    if schema_title and schema_title.has_attr('content'): # type: ignore
+        content = schema_title['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
     # Standard HTML title (lowest priority)
     if soup.title and soup.title.string:
         return soup.title.string.strip()
     
-    return None
+    return ""
 
 
 def get_description(soup: BeautifulSoup) -> str:
     """
     Get page description with fallback chain
     :param soup: BeautifulSoup object
-    :return: Description string or None if not found
+    :return: Description string or empty string if not found
     """
     # Standard meta description
     meta_desc = soup.find('meta', attrs={'name': 'description'})
-    if meta_desc and meta_desc.get('content'):
-        return meta_desc['content'].strip()
+    if meta_desc and meta_desc.has_attr('content'): # type: ignore
+        content = meta_desc['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
     # Open Graph description
     og_desc = soup.find('meta', attrs={'property': 'og:description'})
-    if og_desc and og_desc.get('content'):
-        return og_desc['content'].strip()
+    if og_desc and og_desc.has_attr('content'): # type: ignore
+        content = og_desc['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
     # Twitter description
     twitter_desc = soup.find('meta', attrs={'name': 'twitter:description'})
-    if twitter_desc and twitter_desc.get('content'):
-        return twitter_desc['content'].strip()
+    if twitter_desc and twitter_desc.has_attr('content'): # type: ignore
+        content = twitter_desc['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
     # Schema.org description
     schema_desc = soup.find('meta', attrs={'itemprop': 'description'})
-    if schema_desc and schema_desc.get('content'):
-        return schema_desc['content'].strip()
+    if schema_desc and schema_desc.has_attr('content'): # type: ignore
+        content = schema_desc['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
-    return None
+    return ""
 
 
 def get_keywords(soup: BeautifulSoup) -> str:
     """
     Get page keywords with fallback chain
     :param soup: BeautifulSoup object
-    :return: Keywords string or None if not found
+    :return: Keywords string or empty string if not found
     """
     # Standard meta keywords
     meta_keywords = soup.find('meta', attrs={'name': 'keywords'})
-    if meta_keywords and meta_keywords.get('content'):
-        return meta_keywords['content'].strip()
+    if meta_keywords and meta_keywords.has_attr('content'): # type: ignore
+        content = meta_keywords['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
     # Open Graph keywords (rare but check)
     og_keywords = soup.find('meta', attrs={'property': 'og:keywords'})
-    if og_keywords and og_keywords.get('content'):
-        return og_keywords['content'].strip()
+    if og_keywords and og_keywords.has_attr('content'): # type: ignore
+        content = og_keywords['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
     # Twitter keywords (rare but check)
     twitter_keywords = soup.find('meta', attrs={'name': 'twitter:keywords'})
-    if twitter_keywords and twitter_keywords.get('content'):
-        return twitter_keywords['content'].strip()
+    if twitter_keywords and twitter_keywords.has_attr('content'): # type: ignore
+        content = twitter_keywords['content'] # type: ignore
+        if isinstance(content, str):
+            return content.strip()
     
-    return None
+    return ""
 
 
 async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tuple:
@@ -455,7 +473,7 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
     :param http:
     :return:
     """
-    print("Crawling land %d" % land.id)
+    print(f"Crawling land {land.id}") # type: ignore
     dictionary = get_land_dictionary(land)
 
     # Get distinct depths in ascending order for expressions not yet fetched or matching http filter
@@ -522,225 +540,182 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
 
 async def crawl_expression(expression: model.Expression, dictionary, session: aiohttp.ClientSession):
     """
-    :param expression:
-    :param dictionary:
-    :param session:
-    :return:
+    Crawl and process an expression using a robust pipeline, while preserving the original HTTP status code.
+    Pipeline: Direct Fetch -> [Trafilatura -> BS] -> Fallbacks [Mercury -> Archive]
+    :param expression: The expression to process.
+    :param dictionary: The land's word dictionary for relevance.
+    :param session: aiohttp.ClientSession for requests.
+    :return: 1 if content was processed, 0 on failure.
     """
-    print("Crawling expression %s" % expression.url)
-    result = 0
-    expression.http_status = '000'
-    expression.fetched_at = model.datetime.datetime.now()
-    try:
-        async with session.get(expression.url,
-                               headers={"User-Agent": settings.user_agent},
-                               timeout=aiohttp.ClientTimeout(
-                                   total=None,
-                                   sock_connect=5,
-                                   sock_read=5)) as response:
-            expression.http_status = response.status
-            if response.status == 200 and 'html' in response.headers.get('content-type', ''):
-                content = await response.text()
-                if content:
-                    process_expression_content(expression, content, dictionary)
-                    result = 1
-            else:
-                print(f"Non-200 status for {expression.url}: {response.status}. Trying archive.org.")
-                # For non-200 responses, try archive.org immediately
-                try:
-                    archive_data_url = f"http://archive.org/wayback/available?url={expression.url}"
-                    print(f"Fetching archive availability: {archive_data_url}")
-                    archive_response = await asyncio.to_thread(
-                        lambda: requests.get(archive_data_url, timeout=10)
-                    )
-                    archive_response.raise_for_status() # Check for errors fetching availability
-                    archive_data = archive_response.json()
-                    
-                    archived_url = archive_data.get('archived_snapshots', {}).get('closest', {}).get('url')
-                    if archived_url:
-                        print(f"Found archived URL: {archived_url}")
-                        archived_content_response = await asyncio.to_thread(
-                            lambda: requests.get(archived_url, headers={"User-Agent": settings.user_agent}, timeout=10)
-                        )
-                        archived_content_response.raise_for_status() # Check for errors fetching content
-                        archived_content = archived_content_response.text
-                        if archived_content:
-                            print(f"Processing archived content for {expression.url}")
-                            process_expression_content(expression, archived_content, dictionary)
-                            # Prepend comment to the actual readable content from archive
-                            if expression.readable:
-                                expression.readable = f"<!-- ARCHIVED CONTENT (Original Status: {response.status}) -->\n{expression.readable}"
-                            else:
-                                expression.readable = f"<!-- ARCHIVED CONTENT (Original Status: {response.status}) -->\n{archived_content[:500]}..." # Fallback if readable is empty
-                            result = 1
-                        else:
-                            print(f"Archived content was empty for {expression.url}")
-                    else:
-                        print(f"No archived URL found for {expression.url}")
-                except Exception as e_archive:
-                    print(f"Error during archive.org fallback for {expression.url}: {str(e_archive)}")
-            
-            expression.save()
-            print(f"Saving expression #{expression.id} (status: {expression.http_status}, processed: {bool(result)})")
-            return result
-            
-    except aiohttp.ClientError as e_aio:
-        print(f"AIOHTTP ClientError for {expression.url}: {str(e_aio)}")
-        expression.http_status = '000' # Replaced ERR_AIO with '000' code as requested
-    except requests.exceptions.RequestException as e_req:
-        print(f"Requests Exception for {expression.url} (likely during archive.org): {str(e_req)}")
-        expression.http_status = 'ERR_REQ' # Custom status for requests errors
-    except Exception as e_general:
-        print(f"General Exception for {expression.url}: {str(e_general)}")
-        expression.http_status = 'ERR_GEN' # Custom status for other errors
-    finally:
-        # Ensure expression is always saved, even on unhandled errors within the try
-        if not expression.id: # If expression was never saved due to early error
-             print(f"Expression {expression.url} was not saved due to an early error.")
-        else:
-            try:
-                expression.save()
-                print(f"Saving expression #{expression.id} in finally block (status: {expression.http_status})")
-            except Exception as e_save:
-                print(f"CRITICAL: Failed to save expression #{expression.id} in finally block: {str(e_save)}")
-        return result # result will be 0 if an exception occurred before it was set to 1
-
-
-async def readable_land(land: model.Land, limit: int = 0):
-    """
-    Process readable content for expressions with empty readable field
-    Processing pipeline: trafilatura > Mercuri > archive > raw html
-    :param land:
-    :param limit:
-    :return:
-    """
-    words = get_land_dictionary(land)
-    expressions = model.Expression.select()
-    if limit > 0:
-        expressions = expressions.limit(limit)
-    expressions = expressions.where(
-        model.Expression.land == land,
-        model.Expression.readable.is_null(True) | (model.Expression.readable == '')
-    )
-
-    expression_count = expressions.count()
-    batch_size = settings.parallel_connections
-    batch_count = -(-expression_count//batch_size)
-    last_batch_size = expression_count % batch_size
-    current_offset = 0
-    processed_count = 0
-
-    for current_batch in range(batch_count):
-        print("Batch %s/%s" % (current_batch+1, batch_count))
-        batch_limit = last_batch_size if (current_batch+1 == batch_count and last_batch_size != 0) else batch_size
-        expressions = expressions.limit(batch_limit).offset(current_offset).order_by(SQL('relevance').desc())
-
-        tasks = []
-        for expression in expressions:
-            tasks.append(mercury_readable(expression, words))
-        results = await asyncio.gather(*tasks)
-        processed_count += sum(results)
-        current_offset += batch_size
-    return expression_count, expression_count - processed_count
-
-
-async def mercury_readable(expression: model.Expression, words):
-    """Strict processing pipeline: trafilatura > Mercuri > archive > raw html"""
+    print(f"Crawling expression #{expression.id}: {expression.url}") # type: ignore
     content = None
     raw_html = None
     links = []
+    status_code_str = "000"  # Default to client error
+    expression.fetched_at = model.datetime.datetime.now() # type: ignore
 
-    # Step 1: Try Trafilatura
+    # Step 1: Direct HTTP request to get status and content
     try:
-        from trafilatura import fetch_url, extract
-        downloaded = await asyncio.to_thread(fetch_url, expression.url)
-        if downloaded:
-            raw_html = downloaded
-            content = extract(downloaded, include_links=True, include_comments=False, output_format='markdown')
-            if content:
-                links = extract_md_links(content)
-                expression.readable = f"<!-- TRAFILATURA CONTENT -->\n{content}"
-                print(f"Trafilatura succeeded for {expression.url}")
+        async with session.get(expression.url,
+                               headers={"User-Agent": settings.user_agent},
+                               timeout=aiohttp.ClientTimeout(total=15)) as response:
+            status_code_str = str(response.status)
+            if response.status == 200 and 'html' in response.headers.get('content-type', ''):
+                raw_html = await response.text()
+            else:
+                print(f"Direct request for {expression.url} returned status {status_code_str}")
+
+    except aiohttp.ClientError as e:
+        print(f"ClientError for {expression.url}: {e}. Status: 000.")
+        status_code_str = "000"
     except Exception as e:
-        print(f"Trafilatura failed: {str(e)}")
+        print(f"Generic exception during initial fetch for {expression.url}: {e}")
+        status_code_str = "ERR"
 
-    # Step 2: Fallback to Mercury parser
-    if not content:
+    expression.http_status = str(status_code_str) # type: ignore
+
+    # Step 2: Try to extract content if we got HTML from the direct request
+    if raw_html:
+        # 2a. Trafilatura on the fetched HTML
         try:
-            print(f"Trying mercury-parser for {expression.url}")
-            proc = await asyncio.create_subprocess_shell(
-                f'mercury-parser {expression.url} --format=markdown',
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await proc.communicate()
-
-            data = json.loads(stdout.decode())
-            if 'content' in data and len(data['content']) > 100:
-                content = data['content']
+            extracted_content = trafilatura.extract(raw_html, include_links=True, include_comments=False, include_images=True, output_format='markdown')
+            readable_html = trafilatura.extract(raw_html, include_links=True, include_comments=False, include_images=True, output_format='html')
+            if extracted_content and len(extracted_content) > 100:
+                # Extraction des médias du readable HTML (corps du texte)
+                media_lines = []
+                if readable_html:
+                    soup_readable = BeautifulSoup(readable_html, 'html.parser')
+                    for tag, label in [('img', 'IMAGE'), ('video', 'VIDEO'), ('audio', 'AUDIO')]:
+                        for element in soup_readable.find_all(tag):
+                            src = element.get('src')
+                            if src:
+                                if tag == 'img':
+                                    media_lines.append(f"![{label}]({src})")
+                                else:
+                                    media_lines.append(f"[{label}: {src}]")
+                content = extracted_content
+                if media_lines:
+                    content += "\n\n" + "\n".join(media_lines)
+                # Enregistrer les médias du readable dans la table Media
+                # 1. Depuis le HTML (si balises <img> présentes)
+                if readable_html:
+                    soup_readable = BeautifulSoup(readable_html, 'html.parser')
+                    extract_medias(soup_readable, expression)
+                # 2. Depuis le markdown (pour les images converties en markdown)
+                img_md_links = re.findall(r'!\[.*?\]\((.*?)\)', content)
+                for img_url in img_md_links:
+                    # Vérifier si déjà présent (éviter doublons)
+                    if not model.Media.select().where((model.Media.expression == expression) & (model.Media.url == img_url)).exists():
+                        model.Media.create(expression=expression, url=img_url, type='img')
                 links = extract_md_links(content)
-                expression.readable = f"<!-- MERCURY CONTENT -->\n{content}"
-                print(f"Mercury parser succeeded for {expression.url}")
+                expression.readable = content # type: ignore
+                print(f"Trafilatura succeeded on fetched HTML for {expression.url}")
         except Exception as e:
-            print(f"Mercury parser failed: {str(e)}")
+            print(f"Trafilatura failed on raw HTML for {expression.url}: {e}")
 
-    # Step 3: Fallback to archive.org
+        # 2b. BeautifulSoup as a fallback on the same HTML
+        if not content:
+            try:
+                soup = BeautifulSoup(raw_html, 'html.parser')
+                clean_html(soup)
+                text_content = get_readable(soup)
+                if text_content and len(text_content) > 100:
+                    content = text_content
+                    urls = [a.get('href') for a in soup.find_all('a') if is_crawlable(a.get('href'))]
+                    links = urls
+                    expression.readable = content # type: ignore
+                    print(f"BeautifulSoup fallback succeeded for {expression.url}")
+            except Exception as e:
+                print(f"BeautifulSoup fallback failed for {expression.url}: {e}")
+
+    # Step 3: If no content yet (e.g., non-200 status, or parsing failed), try URL-based fallbacks
     if not content:
-        try:
-            print(f"Trying archive.org for {expression.url}")
-            archived_url = await asyncio.to_thread(
-                lambda: requests.get(
-                    f"http://archive.org/wayback/available?url={expression.url}",
-                    timeout=5
-                ).json().get('archived_snapshots', {}).get('closest', {}).get('url')
-            )
-            if archived_url:
-                from trafilatura import fetch_url, extract
-                downloaded = await asyncio.to_thread(fetch_url, archived_url)
-                if downloaded:
-                    content = extract(downloaded, output_format='markdown')
-                    if content:
-                        expression.readable = f"<!-- ARCHIVED CONTENT -->\n{content}"
-                        print(f"Archive.org succeeded for {expression.url}")
-        except Exception as e:
-            print(f"Archive.org fallback failed: {str(e)}")
+        # 3b. Archive.org (if Mercury also fails)
+        if not content:
+            try:
+                print(f"Trying URL-based fallback: archive.org for {expression.url}")
+                archive_data_url = f"http://archive.org/wayback/available?url={expression.url}"
+                archive_response = await asyncio.to_thread(lambda: requests.get(archive_data_url, timeout=10))
+                archive_response.raise_for_status()
+                archive_data = archive_response.json()
+                archived_url = archive_data.get('archived_snapshots', {}).get('closest', {}).get('url')
+                if archived_url:
+                    downloaded = await asyncio.to_thread(trafilatura.fetch_url, archived_url)
+                    if downloaded:
+                        raw_html = downloaded
+                        extracted_content = trafilatura.extract(downloaded, include_links=True, include_images=True, output_format='markdown')
+                        readable_html = trafilatura.extract(downloaded, include_links=True, include_images=True, output_format='html')
+                        if extracted_content and len(extracted_content) > 100:
+                            # Extraction des médias du readable HTML (corps du texte archivé)
+                            media_lines = []
+                            if readable_html:
+                                soup_readable = BeautifulSoup(readable_html, 'html.parser')
+                                for tag, label in [('img', 'IMAGE'), ('video', 'VIDEO'), ('audio', 'AUDIO')]:
+                                    for element in soup_readable.find_all(tag):
+                                        src = element.get('src')
+                                        if src:
+                                            if tag == 'img':
+                                                media_lines.append(f"![{label}]({src})")
+                                            else:
+                                                media_lines.append(f"[{label}: {src}]")
+                            content = extracted_content
+                            if media_lines:
+                                content += "\n\n" + "\n".join(media_lines)
+                            # Enregistrer les médias du readable archivé dans la table Media
+                            # 1. Depuis le HTML (si balises <img> présentes)
+                            if readable_html:
+                                soup_readable = BeautifulSoup(readable_html, 'html.parser')
+                                extract_medias(soup_readable, expression)
+                            # 2. Depuis le markdown (pour les images converties en markdown)
+                            img_md_links = re.findall(r'!\[.*?\]\((.*?)\)', content)
+                            for img_url in img_md_links:
+                                if not model.Media.select().where((model.Media.expression == expression) & (model.Media.url == img_url)).exists():
+                                    model.Media.create(expression=expression, url=img_url, type='img')
+                            links = extract_md_links(content)
+                            expression.readable = content # type: ignore
+                            print(f"Archive.org + Trafilatura succeeded for {expression.url}")
+            except Exception as e:
+                print(f"Archive.org fallback failed for {expression.url}: {e}")
 
-    # Step 4: Final fallback - store raw HTML
-    if not content and raw_html:
-        expression.readable = f"<!-- PARSER FAILED - RAW HTML -->\n{raw_html}"
-        print(f"Storing raw HTML for {expression.url}")
-
-    # Process results if we got any content
-    if content or raw_html:
-        # Check if page language matches land language
-        if expression.lang and expression.land.lang and expression.lang != expression.land.lang:
-            expression.relevance = 0
-        else:
-            expression.relevance = expression_relevance(words, expression)
-        
-        expression.readable_at = model.datetime.datetime.now()
-        expression.save()
-        
-        # Create links if relevant
-        model.ExpressionLink.delete().where(model.ExpressionLink.source == expression.id)
-        if expression.relevance > 0 and expression.depth < 3 and links:
-            print(f"Linking {len(links)} expressions to #{expression.id}")
+    # Final processing and saving
+    if content:
+        soup = BeautifulSoup(raw_html if raw_html else content, 'html.parser')
+        expression.title = str(get_title(soup) or expression.url) # type: ignore
+        expression.description = str(get_description(soup)) if get_description(soup) else None # type: ignore
+        expression.keywords = str(get_keywords(soup)) if get_keywords(soup) else None # type: ignore
+        expression.lang = str(soup.html.get('lang', '')) if soup.html else '' # type: ignore
+        expression.relevance = expression_relevance(dictionary, expression) # type: ignore
+        expression.readable_at = model.datetime.datetime.now() # type: ignore
+        if expression.relevance is not None and expression.relevance > 0: # type: ignore
+            expression.approved_at = model.datetime.datetime.now() # type: ignore
+        model.ExpressionLink.delete().where(model.ExpressionLink.source == expression.id).execute() # type: ignore
+        if expression.relevance is not None and expression.relevance > 0 and expression.depth is not None and expression.depth < 3 and links: # type: ignore
+            print(f"Linking {len(links)} expressions to #{expression.id}") # type: ignore
             for link in links:
-                link_expression(expression.land, expression, link)
-        
-        return 1 if content else -1
-        
-    return 0
+                link_expression(expression.land, expression, link) # type: ignore
+        expression.save()
+        return 1
+    else:
+        print(f"All extraction methods failed for {expression.url}. Final status: {expression.http_status}")
+        expression.save()
+        return 0
 
 
 def extract_md_links(md_content: str):
     """
-    Extract URLs from Markdown content
+    Extract URLs from Markdown content, en retirant toute parenthèse fermante finale non appariée
     :param md_content:
     :return:
     """
     matches = re.findall(r'\(((https?|ftp)://[^\s/$.?#].[^\s]*)\)', md_content)
-    return [match[0] for match in matches]
+    urls = []
+    for match in matches:
+        url = match[0]
+        # Si l'URL se termine par une parenthèse fermante non appariée, on la retire
+        if url.endswith(")") and url.count("(") <= url.count(")"):
+            url = url[:-1]
+        urls.append(url)
+    return urls
 
 
 def add_expression(land: model.Land, url: str, depth=0) -> Union[model.Expression, bool]:
@@ -797,12 +772,12 @@ def link_expression(land: model.Land, source_expression: model.Expression, url: 
     :param url:
     :return:
     """
-    target_expression = add_expression(land, url, source_expression.depth + 1)
+    target_expression = add_expression(land, url, source_expression.depth + 1) # type: ignore
     if target_expression:
         try:
             model.ExpressionLink.create(
-                source_id=source_expression.get_id(),
-                target_id=target_expression.get_id())
+                source_id=source_expression.id, # type: ignore
+                target_id=target_expression.id) # type: ignore
             return True
         except IntegrityError:
             pass
@@ -836,77 +811,74 @@ def process_expression_content(expression: model.Expression, html: str, dictiona
     :param dictionary:
     :return:
     """
-    print("Processing expression #%s" % expression.id)
+    print(f"Processing expression #{expression.id}") # type: ignore
     soup = BeautifulSoup(html, 'html.parser')
 
     if soup.html is not None:
-        expression.lang = soup.html.get('lang', '')
+        expression.lang = str(soup.html.get('lang', '')) # type: ignore
     
     # Extract basic metadata from the soup object first
-    expression.title = soup.title.string.strip() if soup.title and soup.title.string else ''
-    expression.description = get_meta_content(soup, 'description')
-    expression.keywords = get_meta_content(soup, 'keywords')
+    expression.title = str(soup.title.string.strip()) if soup.title and soup.title.string else '' # type: ignore
+    expression.description = str(get_meta_content(soup, 'description')) if get_meta_content(soup, 'description') else None # type: ignore
+    expression.keywords = str(get_meta_content(soup, 'keywords')) if get_meta_content(soup, 'keywords') else None # type: ignore
     
-    print(f"Initial metadata from HTML for expression {expression.id}: title={bool(expression.title)}, "
+    print(f"Initial metadata from HTML for expression {expression.id}: title={bool(expression.title)}, " # type: ignore
           f"description={bool(expression.description)}, keywords={bool(expression.keywords)}")
     
     # Try to enhance with more robust metadata extraction
     try:
-        metadata = extract_metadata(expression.url)
+        metadata = extract_metadata(str(expression.url)) # Ensure url is str
         
         # Only override if we got better metadata
         if metadata['title']:
-            expression.title = metadata['title']
+            expression.title = str(metadata['title']) # type: ignore
         if metadata['description']:
-            expression.description = metadata['description']
+            expression.description = str(metadata['description']) # type: ignore
         if metadata['keywords']:
-            expression.keywords = metadata['keywords']
+            expression.keywords = str(metadata['keywords']) # type: ignore
             
-        print(f"Enhanced metadata for expression {expression.id}: title={bool(metadata['title'])}, "
+        print(f"Enhanced metadata for expression {expression.id}: title={bool(metadata['title'])}, " # type: ignore
               f"description={bool(metadata['description'])}, keywords={bool(metadata['keywords'])}")
     except Exception as e:
-        print(f"Error enhancing metadata for expression {expression.id}: {str(e)}")
+        print(f"Error enhancing metadata for expression {expression.id}: {str(e)}") # type: ignore
     
     # Ensure title has at least an empty string, but leave description and keywords as null if not found
-    domain_name = expression.domain.name if expression.domain else urlparse(expression.url).netloc
-    expression.title = expression.title or f"Content from {domain_name}"
-    # Don't provide default values for description and keywords
-    # expression.description = expression.description or None
-    # expression.keywords = expression.keywords or None
+    domain_name = expression.domain.name if expression.domain else urlparse(str(expression.url)).netloc # Ensure url is str
+    expression.title = str(expression.title or f"Content from {domain_name}") # type: ignore
     
-    print(f"Final expression metadata to save: title={bool(expression.title)}, "
+    print(f"Final expression metadata to save: title={bool(expression.title)}, " # type: ignore
           f"description={bool(expression.description)}, keywords={bool(expression.keywords)}")
 
     clean_html(soup)
 
     if settings.archive is True:
         loc = path.join(settings.data_location, 'lands/%s/%s') \
-              % (expression.land.get_id(), expression.get_id())
+              % (expression.land.id, expression.id) # Use .id instead of .get_id() # type: ignore
         with open(loc, 'w', encoding="utf-8") as html_file:
             html_file.write(html.strip())
         html_file.close()
 
     readable_content = get_readable(soup)
     if not readable_content.strip():
-        expression.readable = f"<!-- RAW HTML -->\n{html}"
+        expression.readable = f"<!-- RAW HTML -->\n{html}" # type: ignore
     else:
-        expression.readable = readable_content
+        expression.readable = readable_content # type: ignore
 
     # Check if page language matches land language
     if expression.lang and expression.land.lang and expression.lang != expression.land.lang:
-        expression.relevance = 0
+        expression.relevance = 0 # type: ignore
     else:
-        expression.relevance = expression_relevance(dictionary, expression)
+        expression.relevance = expression_relevance(dictionary, expression) # type: ignore
 
-    if expression.relevance > 0:
-        print("Expression #%d approved" % expression.get_id())
+    if expression.relevance is not None and expression.relevance > 0: # type: ignore
+        print(f"Expression #{expression.id} approved") # type: ignore
         extract_medias(soup, expression)
-        expression.approved_at = model.datetime.datetime.now()
-        if expression.depth < 3:
+        expression.approved_at = model.datetime.datetime.now() # type: ignore
+        if expression.depth is not None and expression.depth < 3: # type: ignore
             urls = [a.get('href') for a in soup.find_all('a') if is_crawlable(a.get('href'))]
-            print("Linking %d expression to #%s" % (len(urls), expression.id))
+            print(f"Linking {len(urls)} expression to #{expression.id}") # type: ignore
             for url in urls:
-                link_expression(expression.land, expression, url)
+                link_expression(expression.land, expression, url) # type: ignore
 
     return expression
 
@@ -918,27 +890,42 @@ def extract_medias(content, expression: model.Expression):
     :param expression:
     :return:
     """
-    print("Extracting media from #%s" % expression.id)
+    print(f"Extracting media from #{expression.id}") # type: ignore
     medias = []
+    IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg")
+    VIDEO_EXTENSIONS = (".mp4", ".webm", ".ogg", ".ogv", ".mov", ".avi", ".mkv")
+    AUDIO_EXTENSIONS = (".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a")
     for tag in ['img', 'video', 'audio']:
         for element in content.find_all(tag):
             src = element.get('src')
             is_valid_src = src is not None and src not in medias
             if tag == 'img':
-                is_valid_src = is_valid_src and src.endswith(".jpg")
+                is_valid_src = is_valid_src and src.lower().endswith(IMAGE_EXTENSIONS)
+            elif tag == 'video':
+                is_valid_src = is_valid_src and (src.lower().endswith(VIDEO_EXTENSIONS) or True)
+            elif tag == 'audio':
+                is_valid_src = is_valid_src and (src.lower().endswith(AUDIO_EXTENSIONS) or True)
             if is_valid_src:
                 if src.startswith("/"):
-                    src = expression.url[:expression.url.find("/", 9) + 1].strip('/') + src
+                    src = str(expression.url)[:str(expression.url).find("/", 9) + 1].strip('/') + src # Ensure url is str
                 media = model.Media.create(expression=expression, url=src, type=tag)
                 media.save()
 
 
 def get_readable(content):
     """
-    Get readable part of HTML content
+    Get readable part of HTML content, preserving media links as [IMAGE: url], [VIDEO: url], [AUDIO: url]
     :param content:
     :return:
     """
+    # Insérer des marqueurs pour les médias avant d'extraire le texte
+    for tag, label in [('img', 'IMAGE'), ('video', 'VIDEO'), ('audio', 'AUDIO')]:
+        for element in content.find_all(tag):
+            src = element.get('src')
+            if src:
+                marker = f"[{label}: {src}]"
+                # Remplacer la balise entière par le marqueur
+                element.replace_with(marker)
     text = content.get_text(separator=' ')
     lines = text.split("\n")
     text_lines = [line.strip() for line in lines if len(line.strip()) > 0]
@@ -980,9 +967,9 @@ def land_relevance(land: model.Land):
         .where(model.Expression.land == land, model.Expression.readable.is_null(False))
     row_count = select.count()
     if row_count > 0:
-        print("Updating relevances for %d expressions, it may take some time." % row_count)
+        print(f"Updating relevances for {row_count} expressions, it may take some time.")
         for expression in select:
-            expression.relevance = expression_relevance(words, expression)
+            expression.relevance = expression_relevance(words, expression) # type: ignore
             expression.save()
 
 
@@ -998,14 +985,17 @@ def expression_relevance(dictionary, expression: model.Expression) -> int:
     content_relevance = [0]
 
     def get_relevance(text, weight) -> list:
+        if not isinstance(text, str): # Ensure text is a string
+            text = str(text)
         stems = [stem_word(w) for w in word_tokenize(text, language='french')]
         stemmed_text = " ".join(stems)
         return [sum(weight for _ in re.finditer(r'\b%s\b' % re.escape(lemma), stemmed_text)) for lemma in lemmas]
 
     try:
-        title_relevance = get_relevance(expression.title, 10)
-        content_relevance = get_relevance(expression.readable, 1)
-    except:
+        title_relevance = get_relevance(expression.title, 10) # type: ignore
+        content_relevance = get_relevance(expression.readable, 1) # type: ignore
+    except Exception as e:
+        print(f"Error computing relevance: {e}")
         pass
     return sum(title_relevance) + sum(content_relevance)
 
@@ -1051,13 +1041,13 @@ def update_heuristic():
     expressions = model.Expression.select()
     updated = 0
     for expression in expressions:
-        domain = get_domain_name(expression.url)
+        domain = get_domain_name(str(expression.url)) # Ensure url is str
         if domain != domains[expression.domain_id]['name']:
             to_domain, _ = model.Domain.get_or_create(name=domain)
             expression.domain = to_domain
             expression.save()
             updated += 1
-    print("%d domain(s) updated" % updated)
+    print(f"{updated} domain(s) updated")
 
 
 def delete_media(land: model.Land, max_width: int = 0, max_height: int = 0, max_size: int = 0):
