@@ -69,3 +69,17 @@ def test_functional_test():
         args = Namespace(**command)
         ret = dispatch(args)
         assert ret == 1
+
+def test_land_multi_language():
+    """
+    Test that creating a land with multiple languages stores the correct lang string.
+    """
+    from mwi import model
+    land_name = 'test_multi_lang_' + ''.join(random.choice(string.ascii_lowercase) for _ in range(6))
+    langs = ['fr', 'en', 'it']
+    args = Namespace(object='land', verb='create', name=land_name, desc='Test multi lang', lang=langs)
+    ret = dispatch(args)
+    assert ret == 1
+    land = model.Land.get_or_none(model.Land.name == land_name)
+    assert land is not None
+    assert land.lang == ','.join(langs)

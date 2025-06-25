@@ -465,34 +465,39 @@ def get_keywords(soup: BeautifulSoup) -> str:
     return ""
 
 
-async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tuple:
+async def crawl_land(land: model.Land, limit: int = 0, http: str = None, depth: int = None) -> tuple:
     """
     Start land crawl
     :param land:
     :param limit:
     :param http:
+    :param depth: Only crawl expressions at this depth (if not None)
     :return:
     """
     print(f"Crawling land {land.id}") # type: ignore
     dictionary = get_land_dictionary(land)
 
-    # Get distinct depths in ascending order for expressions not yet fetched or matching http filter
-    if http is None:
-        depths_query = model.Expression.select(model.Expression.depth).where(
-            model.Expression.land == land,
-            model.Expression.fetched_at.is_null(True)
-        ).distinct().order_by(model.Expression.depth)
-    else:
-        depths_query = model.Expression.select(model.Expression.depth).where(
-            model.Expression.land == land,
-            model.Expression.http_status == http
-        ).distinct().order_by(model.Expression.depth)
-
     total_processed = 0
     total_errors = 0
 
-    for depth_record in depths_query:
-        current_depth = depth_record.depth
+    # If depth is specified, only process that depth
+    if depth is not None:
+        depths_to_process = [depth]
+    else:
+        # Get distinct depths in ascending order for expressions not yet fetched or matching http filter
+        if http is None:
+            depths_query = model.Expression.select(model.Expression.depth).where(
+                model.Expression.land == land,
+                model.Expression.fetched_at.is_null(True)
+            ).distinct().order_by(model.Expression.depth)
+        else:
+            depths_query = model.Expression.select(model.Expression.depth).where(
+                model.Expression.land == land,
+                model.Expression.http_status == http
+            ).distinct().order_by(model.Expression.depth)
+        depths_to_process = [d.depth for d in depths_query]
+
+    for current_depth in depths_to_process:
         print(f"Processing depth {current_depth}")
 
         if http is None:
@@ -534,6 +539,95 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None) -> tupl
 
             if limit > 0 and total_processed >= limit:
                 return total_processed, total_errors
+
+    return total_processed, total_errors
+
+async def consolidate_land(land: model.Land, limit: int = 0, depth: int = None) -> tuple:
+    """
+    Consolidate a land: for each expression, recalculate relevance, links, media, add missing docs, recreate links, replace old ones.
+    :param land:
+    :param limit:
+    :param depth: Only process expressions at this depth (if not None)
+    :return: (number of expressions consolidated, number of errors)
+    """
+    print(f"Consolidating land {land.id}") # type: ignore
+    dictionary = get_land_dictionary(land)
+
+    # Select expressions to process
+    query = model.Expression.select().where(
+        model.Expression.land == land,
+        model.Expression.fetched_at.is_null(False)
+    )
+    if depth is not None:
+        query = query.where(model.Expression.depth == depth)
+    if limit > 0:
+        query = query.limit(limit)
+
+    total_processed = 0
+    total_errors = 0
+
+    batch_size = settings.parallel_connections
+    expression_count = query.count()
+    batch_count = -(-expression_count // batch_size)
+    last_batch_size = expression_count % batch_size
+    current_offset = 0
+
+    for current_batch in range(batch_count):
+        print(f"Consolidation batch {current_batch + 1}/{batch_count}")
+        batch_limit = last_batch_size if (current_batch + 1 == batch_count and last_batch_size != 0) else batch_size
+        current_expressions = query.limit(batch_limit).offset(current_offset)
+
+        for expr in current_expressions:
+            try:
+                # 1. Supprimer anciens liens et médias
+                model.ExpressionLink.delete().where(model.ExpressionLink.source == expr.id).execute()
+                model.Media.delete().where(model.Media.expression == expr.id).execute()
+
+                # 2. Recalculer la relevance et le contenu
+                expr.relevance = expression_relevance(dictionary, expr) # type: ignore
+                expr.save()
+
+                # 3. Extraire les liens sortants du contenu lisible
+                links = []
+                if expr.readable:
+                    # Extraction des liens markdown
+                    links = extract_md_links(expr.readable)
+                    # Extraction des liens HTML (fallback)
+                    soup = BeautifulSoup(expr.readable, 'html.parser')
+                    urls = [a.get('href') for a in soup.find_all('a') if is_crawlable(a.get('href'))]
+                    links += [u for u in urls if u and u not in links]
+                nb_links = len(set(links))
+
+                # 4. Ajouter les documents manquants et recréer les liens
+                for url in set(links):
+                    if is_crawlable(url):
+                        target_expr = add_expression(land, url, expr.depth + 1 if expr.depth is not None else 1)
+                        if target_expr:
+                            try:
+                                model.ExpressionLink.create(
+                                    source_id=expr.id, # type: ignore
+                                    target_id=target_expr.id) # type: ignore
+                            except IntegrityError:
+                                pass
+
+                # 5. Extraire et recréer les médias
+                nb_media = 0
+                if expr.readable:
+                    soup = BeautifulSoup(expr.readable, 'html.parser')
+                    extract_medias(soup, expr)
+                    nb_media = model.Media.select().where(model.Media.expression == expr.id).count()
+
+                print(f"Expression #{expr.id}: {nb_links} liens extraits, {nb_media} médias extraits.")
+
+                total_processed += 1
+            except Exception as e:
+                print(f"Error consolidating expression {expr.id}: {e}")
+                total_errors += 1
+
+        current_offset += batch_size
+
+        if limit > 0 and total_processed >= limit:
+            return total_processed, total_errors
 
     return total_processed, total_errors
 

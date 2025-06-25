@@ -42,6 +42,29 @@ class LandController:
     """
 
     @staticmethod
+    def consolidate(args: core.Namespace):
+        """
+        Consolidate a land: recalculates relevance, links, media, adds missing docs, recreates links, replaces old ones.
+        :param args:
+        :return:
+        """
+        core.check_args(args, 'name')
+        fetch_limit = core.get_arg_option('limit', args, set_type=int, default=0)
+        depth = core.get_arg_option('depth', args, set_type=int, default=None)
+        land = model.Land.get_or_none(model.Land.name == args.name)
+        if land is None:
+            print('Land "%s" not found' % args.name)
+        else:
+            if sys.platform == 'win32':
+                asyncio.set_event_loop(asyncio.ProactorEventLoop())
+            loop = asyncio.get_event_loop()
+            results = loop.run_until_complete(core.consolidate_land(land, fetch_limit, depth))
+            print("%d expressions consolidated (%d errors)" % results)
+            return 1
+        return 0
+
+
+    @staticmethod
     def list(args: core.Namespace):
         """
         Lists some information about existing lands
@@ -116,7 +139,9 @@ class LandController:
         :return:
         """
         core.check_args(args, ('name', 'desc'))
-        land = model.Land.create(name=args.name, description=args.desc, lang=args.lang)
+        # Store lang as comma-separated string
+        lang_str = ",".join(args.lang) if isinstance(args.lang, list) else str(args.lang)
+        land = model.Land.create(name=args.name, description=args.desc, lang=lang_str)
         os.makedirs(os.path.join(settings.data_location, 'lands/%s') % land.get_id(), exist_ok=True)
         print('Land "%s" created' % args.name)
         return 1
@@ -211,12 +236,15 @@ class LandController:
         http_status = core.get_arg_option('http', args, set_type=str, default=None)
         if http_status is not None:
             print('Limited to %s HTTP status code' % http_status)
+        depth = core.get_arg_option('depth', args, set_type=int, default=None)
+        if depth is not None:
+            print('Only crawling URLs with depth = %s' % depth)
         land = model.Land.get_or_none(model.Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
         else:
             loop = asyncio.get_event_loop()
-            results = loop.run_until_complete(core.crawl_land(land, fetch_limit, http_status))
+            results = loop.run_until_complete(core.crawl_land(land, fetch_limit, http_status, depth))
             print("%d expressions processed (%d errors)" % results)
             return 1
         return 0

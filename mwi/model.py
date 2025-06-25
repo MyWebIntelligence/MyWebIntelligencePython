@@ -43,7 +43,7 @@ class Land(BaseModel):
     """
     name = CharField(unique=True)
     description = TextField()
-    lang = CharField(max_length=10, default='fr')
+    lang = CharField(max_length=100, default='fr')  # Accepts comma-separated list of languages
     created_at = DateTimeField(default=datetime.datetime.now)
 
 
@@ -68,7 +68,7 @@ class Expression(BaseModel):
     url = TextField(index=True)
     domain = ForeignKeyField(Domain, backref='expressions')
     http_status = CharField(max_length=3, null=True, index=True)
-    lang = CharField(max_length=10, null=True)
+    lang = CharField(max_length=100, null=True)  # Accepts comma-separated list of languages
     title = CharField(null=True)
     description = TextField(null=True)
     keywords = TextField(null=True)

@@ -226,6 +226,42 @@ You are now ready to use MyWI commands as described in the [Usage](#usage) secti
 
 A "Land" is a central concept in MyWI, representing a specific research area or topic.
 
+---
+
+### Land Consolidation Pipeline
+
+The `land consolidate` pipeline is designed to re-compute and repair the internal structure of a land after the database has been modified by third-party applications (such as MyWebClient) or external scripts.
+
+**Purpose:**  
+- Recalculates the relevance score for each crawled page (expressions with a non-null `fetched_at`).
+- Re-extracts and recreates all outgoing links (ExpressionLink) and media (Media) for these pages.
+- Adds any missing documents referenced by links.
+- Rebuilds the link graph and media associations from scratch, replacing any outdated or inconsistent data.
+
+**When to use:**  
+- After importing or modifying data in the database with external tools (e.g., MyWebClient).
+- To restore consistency if links or media are out of sync with the actual page content.
+
+**Command:**
+```bash
+python mywi.py land consolidate --name=LAND_NAME [--limit=LIMIT] [--depth=NbDEEP]
+```
+- `--name` (required): Name of the land to consolidate.
+- `--limit` (optional): Maximum number of pages to process.
+- `--depth` (optional): Only process pages at the specified crawl depth.
+
+**Example:**
+```bash
+python mywi.py land consolidate --name="AsthmaResearch" --depth=0
+```
+
+**Notes:**
+- Only pages that have already been crawled (`fetched_at` is set) are affected.
+- For each page, the number of extracted links and media is displayed.
+- This pipeline is especially useful after bulk imports, migrations, or when using third-party clients that may not maintain all MyWI invariants.
+
+---
+
 #### 1. Create a New Land
 
 Create a new land (research topic/project).
@@ -338,12 +374,15 @@ python mywi.py land crawl --name="MyResearchTopic" [--limit=NUMBER] [--http=HTTP
 | --name   | str    | Yes      |         | Name of the land whose URLs to crawl                                        |
 | --limit  | int    | No       |         | Maximum number of URLs to crawl in this run                                 |
 | --http   | str    | No       |         | Re-crawl only pages that previously resulted in this HTTP error (e.g., 503) |
+| --depth  | int    | No       |         | Only crawl URLs that remain to be crawled at the specified depth            |
 
 **Examples:**
 ```bash
 python mywi.py land crawl --name="AsthmaResearch"
 python mywi.py land crawl --name="AsthmaResearch" --limit=10
 python mywi.py land crawl --name="AsthmaResearch" --http=503
+python mywi.py land crawl --name="AsthmaResearch" --depth=2
+python mywi.py land crawl --name="AsthmaResearch" --depth=1 --limit=5
 ```
 
 ---

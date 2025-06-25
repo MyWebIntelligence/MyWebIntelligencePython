@@ -77,12 +77,19 @@ def command_input():
                         type=str,
                         help='Limit crawling to specific http status (re crawling)',
                         nargs='?')
+    parser.add_argument('--depth',
+                        type=int,
+                        help='Only crawl URLs with the specified depth (for land crawl)',
+                        nargs='?')
     parser.add_argument('--lang',
                         type=str,
                         help='Language of the project (default: fr)',
                         default='fr',
                         nargs='?')
     args = parser.parse_args()
+    # Always convert lang to a list
+    if hasattr(args, "lang") and isinstance(args.lang, str):
+        args.lang = [l.strip() for l in args.lang.split(",") if l.strip()]
     dispatch(args)
 
 
@@ -108,6 +115,7 @@ def dispatch(args):
             'export':   LandController.export,
             'addterm':  LandController.addterm,
             'addurl':   LandController.addurl,
+            'consolidate': LandController.consolidate,
         },
         'tag': {
             'export': TagController.export,
