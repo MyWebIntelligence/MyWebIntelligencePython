@@ -23,8 +23,6 @@ MyWebIntelligence (MyWI) is a Python-based tool designed to assist researchers i
 *   **Land Creation & Management**: Organize your research into "lands," which are thematic collections of terms and URLs.
 *   **Web Crawling**: Crawl URLs associated with your lands to gather web page content.
 *   **Content Extraction**: Process crawled pages to extract readable content.
-*   **Enhanced Media Detection**: Detects media files with both uppercase and lowercase extensions (.JPG, .jpg, .PNG, .png, etc.).
-*   **Dynamic Media Extraction**: Optional headless browser-based extraction for JavaScript-generated and lazy-loaded media content.
 *   **Domain Analysis**: Gather information about domains encountered during crawling.
 *   **Data Export**: Export collected data in various formats (CSV, GEXF, raw corpus) for further analysis.
 *   **Tag-based Analysis**: Export tag matrices and content for deeper insights.
@@ -158,18 +156,6 @@ You can install MyWI using Docker (recommended for ease of use) or by setting up
     ```
     You are now ready to use MyWI commands as described in the [Usage](#usage) section.
 
-**Note on Dynamic Media Extraction:**
-The Docker image includes Playwright and Chromium browser for enhanced media detection. This enables:
-- Detection of JavaScript-generated media content
-- Extraction of lazy-loaded images
-- Support for dynamic content that requires browser rendering
-
-To test the dynamic media extraction functionality:
-```bash
-# Inside the Docker container
-python test_dynamic_media.py
-```
-
 ### Local Development Setup
 
 **Prerequisites:**
@@ -219,23 +205,11 @@ python test_dynamic_media.py
     (venv) pip install -r requirements.txt
     ```
 
-6.  **Install Playwright Browsers (Optional - for Dynamic Media Extraction):**
-    ```bash
-    (venv) python install_playwright.py
-    ```
-    This step is optional but recommended if you want to use the dynamic media extraction feature for JavaScript-generated content.
-
-7.  **Setup Database:**
+6.  **Setup Database:**
     ```bash
     (venv) python mywi.py db setup
     ```
     This command creates the database file in the `data_location` you specified. Warning: it will destroy any previous data if the database file already exists from a prior setup.
-
-8.  **Test Installation (Optional):**
-    ```bash
-    (venv) python test_dynamic_media.py
-    ```
-    This tests both basic URL resolution and dynamic media extraction (if Playwright is installed).
 
 You are now ready to use MyWI commands as described in the [Usage](#usage) section using `(venv) python mywi.py ...`.
 

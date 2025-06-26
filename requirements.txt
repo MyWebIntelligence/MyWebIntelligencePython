@@ -24,3 +24,4 @@ yarl==1.7.2
 trafilatura==1.4.0
 PyMuPDF==1.24.4
 pytest
+playwright==1.41.0

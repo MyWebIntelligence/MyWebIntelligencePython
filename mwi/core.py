@@ -7,7 +7,7 @@ import re
 from argparse import Namespace
 from os import path
 from typing import Union
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 import aiohttp # type: ignore
 import nltk # type: ignore
@@ -17,6 +17,12 @@ from nltk.stem.snowball import FrenchStemmer # type: ignore
 from nltk.tokenize import word_tokenize # type: ignore
 from peewee import IntegrityError, JOIN, SQL
 import trafilatura # type: ignore
+try:
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    print("Warning: Playwright not available. Dynamic media extraction will be skipped.")
 
 import settings
 from . import model
@@ -26,6 +32,135 @@ try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
     nltk.download('punkt')
+
+
+async def extract_dynamic_medias(url: str, expression: model.Expression) -> list:
+    """
+    Extract media URLs from a webpage using a headless browser to execute JavaScript
+    and capture dynamically generated media URLs
+    :param url: URL to extract media from
+    :param expression: The expression object to associate media with
+    :return: List of media URLs found after JavaScript execution
+    """
+    if not PLAYWRIGHT_AVAILABLE:
+        print(f"Playwright not available, skipping dynamic media extraction for {url}")
+        return []
+
+    dynamic_medias = []
+    
+    try:
+        async with async_playwright() as p:
+            # Launch browser in headless mode
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            
+            # Set user agent to match the one used in regular crawling
+            await page.set_extra_http_headers({"User-Agent": settings.user_agent})
+            
+            # Navigate to the page
+            await page.goto(url, wait_until='networkidle', timeout=30000)
+            
+            # Wait for additional time to let dynamic content load
+            await page.wait_for_timeout(3000)
+            
+            # Extract media elements after JavaScript execution
+            media_selectors = {
+                'img': 'img[src]',
+                'video': 'video[src], video source[src]',
+                'audio': 'audio[src], audio source[src]'
+            }
+            
+            for media_type, selector in media_selectors.items():
+                elements = await page.query_selector_all(selector)
+                
+                for element in elements:
+                    src = await element.get_attribute('src')
+                    if src:
+                        # Resolve relative URLs to absolute
+                        resolved_url = resolve_url(url, src)
+                        
+                        # Check if this is a valid media type
+                        if media_type == 'img':
+                            IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg")
+                            if resolved_url.lower().endswith(IMAGE_EXTENSIONS):
+                                dynamic_medias.append({
+                                    'url': resolved_url,
+                                    'type': media_type
+                                })
+                        elif media_type in ['video', 'audio']:
+                            dynamic_medias.append({
+                                'url': resolved_url,
+                                'type': media_type
+                            })
+            
+            # Look for lazy-loaded images and other dynamic content
+            # Check for data-src, data-lazy-src, and other common lazy loading attributes
+            lazy_img_selectors = [
+                'img[data-src]',
+                'img[data-lazy-src]', 
+                'img[data-original]',
+                'img[data-url]'
+            ]
+            
+            for selector in lazy_img_selectors:
+                elements = await page.query_selector_all(selector)
+                for element in elements:
+                    for attr in ['data-src', 'data-lazy-src', 'data-original', 'data-url']:
+                        src = await element.get_attribute(attr)
+                        if src:
+                            resolved_url = resolve_url(url, src)
+                            IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg")
+                            if resolved_url.lower().endswith(IMAGE_EXTENSIONS):
+                                dynamic_medias.append({
+                                    'url': resolved_url,
+                                    'type': 'img'
+                                })
+                            break  # Stop at first found attribute
+            
+            # Close browser
+            await browser.close()
+            
+        print(f"Dynamic media extraction found {len(dynamic_medias)} media items for {url}")
+        
+        # Save found media to database
+        for media_info in dynamic_medias:
+            # Check if media doesn't already exist in database
+            if not model.Media.select().where(
+                (model.Media.expression == expression) & 
+                (model.Media.url == media_info['url'])
+            ).exists():
+                media = model.Media.create(
+                    expression=expression, 
+                    url=media_info['url'], 
+                    type=media_info['type']
+                )
+                media.save()
+        
+        return [media['url'] for media in dynamic_medias]
+        
+    except Exception as e:
+        print(f"Error during dynamic media extraction for {url}: {e}")
+        return []
+
+
+def resolve_url(base_url: str, relative_url: str) -> str:
+    """
+    Resolve relative URL to absolute URL using the base URL
+    :param base_url: The base URL (page URL)
+    :param relative_url: The relative or absolute URL to resolve
+    :return: Absolute URL
+    """
+    try:
+        # If already absolute, return as is (but lowercase for consistency)
+        if relative_url.startswith(('http://', 'https://')):
+            return relative_url.lower()
+        
+        # Use urljoin to properly resolve relative URLs
+        resolved_url = urljoin(base_url, relative_url)
+        return resolved_url.lower()
+    except Exception as e:
+        print(f"Error resolving URL '{relative_url}' with base '{base_url}': {e}")
+        return relative_url.lower()
 
 
 def confirm(message: str) -> bool:
@@ -698,9 +833,11 @@ async def crawl_expression(expression: model.Expression, dictionary, session: ai
                 # 2. Depuis le markdown (pour les images converties en markdown)
                 img_md_links = re.findall(r'!\[.*?\]\((.*?)\)', content)
                 for img_url in img_md_links:
+                    # Résoudre l'URL relative en URL absolue
+                    resolved_img_url = resolve_url(str(expression.url), img_url)
                     # Vérifier si déjà présent (éviter doublons)
-                    if not model.Media.select().where((model.Media.expression == expression) & (model.Media.url == img_url)).exists():
-                        model.Media.create(expression=expression, url=img_url, type='img')
+                    if not model.Media.select().where((model.Media.expression == expression) & (model.Media.url == resolved_img_url)).exists():
+                        model.Media.create(expression=expression, url=resolved_img_url, type='img')
                 links = extract_md_links(content)
                 expression.readable = content # type: ignore
                 print(f"Trafilatura succeeded on fetched HTML for {expression.url}")
@@ -763,8 +900,10 @@ async def crawl_expression(expression: model.Expression, dictionary, session: ai
                             # 2. Depuis le markdown (pour les images converties en markdown)
                             img_md_links = re.findall(r'!\[.*?\]\((.*?)\)', content)
                             for img_url in img_md_links:
-                                if not model.Media.select().where((model.Media.expression == expression) & (model.Media.url == img_url)).exists():
-                                    model.Media.create(expression=expression, url=img_url, type='img')
+                                # Résoudre l'URL relative en URL absolue
+                                resolved_img_url = resolve_url(str(expression.url), img_url)
+                                if not model.Media.select().where((model.Media.expression == expression) & (model.Media.url == resolved_img_url)).exists():
+                                    model.Media.create(expression=expression, url=resolved_img_url, type='img')
                             links = extract_md_links(content)
                             expression.readable = content # type: ignore
                             print(f"Archive.org + Trafilatura succeeded for {expression.url}")
@@ -783,6 +922,22 @@ async def crawl_expression(expression: model.Expression, dictionary, session: ai
         if expression.relevance is not None and expression.relevance > 0: # type: ignore
             expression.approved_at = model.datetime.datetime.now() # type: ignore
         model.ExpressionLink.delete().where(model.ExpressionLink.source == expression.id).execute() # type: ignore
+        
+        # Extract dynamic media using headless browser (only for approved expressions)
+        if (expression.relevance is not None and expression.relevance > 0 and # type: ignore
+            settings.dynamic_media_extraction and PLAYWRIGHT_AVAILABLE):
+            try:
+                print(f"Attempting dynamic media extraction for #{expression.id}") # type: ignore
+                dynamic_media_urls = await extract_dynamic_medias(str(expression.url), expression)
+                if dynamic_media_urls:
+                    print(f"Dynamic extraction found {len(dynamic_media_urls)} additional media items for #{expression.id}") # type: ignore
+                else:
+                    print(f"No dynamic media found for #{expression.id}") # type: ignore
+            except Exception as e:
+                print(f"Dynamic media extraction failed for #{expression.id}: {e}") # type: ignore
+        elif expression.relevance is not None and expression.relevance > 0 and settings.dynamic_media_extraction and not PLAYWRIGHT_AVAILABLE: # type: ignore
+            print(f"Dynamic media extraction requested but Playwright not available for #{expression.id}") # type: ignore
+        
         if expression.relevance is not None and expression.relevance > 0 and expression.depth is not None and expression.depth < 3 and links: # type: ignore
             print(f"Linking {len(links)} expressions to #{expression.id}") # type: ignore
             for link in links:
@@ -989,21 +1144,33 @@ def extract_medias(content, expression: model.Expression):
     IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg")
     VIDEO_EXTENSIONS = (".mp4", ".webm", ".ogg", ".ogv", ".mov", ".avi", ".mkv")
     AUDIO_EXTENSIONS = (".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a")
+    
     for tag in ['img', 'video', 'audio']:
         for element in content.find_all(tag):
             src = element.get('src')
-            is_valid_src = src is not None and src not in medias
+            if src is None:
+                continue
+                
+            is_valid_src = src not in medias
             if tag == 'img':
                 is_valid_src = is_valid_src and src.lower().endswith(IMAGE_EXTENSIONS)
             elif tag == 'video':
                 is_valid_src = is_valid_src and (src.lower().endswith(VIDEO_EXTENSIONS) or True)
             elif tag == 'audio':
                 is_valid_src = is_valid_src and (src.lower().endswith(AUDIO_EXTENSIONS) or True)
+            
             if is_valid_src:
-                if src.startswith("/"):
-                    src = str(expression.url)[:str(expression.url).find("/", 9) + 1].strip('/') + src # Ensure url is str
-                media = model.Media.create(expression=expression, url=src, type=tag)
-                media.save()
+                # Resolve relative URLs to absolute URLs
+                resolved_url = resolve_url(str(expression.url), src)
+                medias.append(resolved_url)
+                
+                # Check if media doesn't already exist in database
+                if not model.Media.select().where(
+                    (model.Media.expression == expression) & 
+                    (model.Media.url == resolved_url)
+                ).exists():
+                    media = model.Media.create(expression=expression, url=resolved_url, type=tag)
+                    media.save()
 
 
 def get_readable(content):

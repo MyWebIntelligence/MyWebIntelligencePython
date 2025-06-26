@@ -2,6 +2,9 @@ data_location = "data/"
 
 archive = False
 
+# Enable dynamic media extraction using headless browser (requires Playwright)
+dynamic_media_extraction = True
+
 default_timeout = 10 # Default timeout in seconds for network requests
 
 parallel_connections = 10
