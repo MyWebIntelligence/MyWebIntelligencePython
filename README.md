@@ -413,24 +413,78 @@ python mywi.py land crawl --name="AsthmaResearch" --depth=1 --limit=5
 
 ---
 
-#### 2. Fetch Readable Content
+#### 2. Fetch Readable Content (Mercury Parser Pipeline)
 
-Extract a cleaner, more readable version of the crawled page content (requires Mercury Parser CLI).
+Extract high-quality, readable content using the **Mercury Parser autonomous pipeline**. This modern system provides intelligent content extraction with configurable merge strategies and automatic media/link enrichment.
 
+**Prerequisites:** Requires `mercury-parser` CLI tool installed:
 ```bash
-python mywi.py land readable --name="MyResearchTopic" [--limit=NUMBER]
+npm install -g @postlight/mercury-parser
+```
+
+**Command:**
+```bash
+python mywi.py land readable --name="MyResearchTopic" [--limit=NUMBER] [--depth=NUMBER] [--merge=STRATEGY]
 ```
 
 | Option   | Type   | Required | Default | Description                                         |
 |----------|--------|----------|---------|-----------------------------------------------------|
 | --name   | str    | Yes      |         | Name of the land to process                         |
 | --limit  | int    | No       |         | Maximum number of pages to process in this run      |
+| --depth  | int    | No       |         | Maximum crawl depth to process (e.g., 2 = seeds + 2 levels) |
+| --merge  | str    | No       | smart_merge | Merge strategy for content fusion (see below)    |
+
+**Merge Strategies:**
+
+- **`smart_merge`** (default): Intelligent fusion based on field type
+  - Titles: prefers longer, more informative titles
+  - Content: Mercury Parser takes priority (cleaner extraction)
+  - Descriptions: keeps the most detailed version
+  
+- **`mercury_priority`**: Mercury always overwrites existing data
+  - Use for data migration or when Mercury extraction is preferred
+  
+- **`preserve_existing`**: Only fills empty fields, never overwrites
+  - Safe option for enrichment without data loss
+
+**Pipeline Features:**
+
+- **High-Quality Extraction**: Mercury Parser provides excellent content cleaning
+- **Bidirectional Logic**: 
+  - Empty database + Mercury content → Fills from Mercury
+  - Full database + Empty Mercury → Preserves database (abstains)
+  - Full database + Full Mercury → Applies merge strategy
+- **Automatic Enrichment**: 
+  - Extracts and links media files (images, videos)
+  - Creates expression links from discovered URLs
+  - Updates metadata (author, publication date, language)
+  - Recalculates relevance scores
 
 **Examples:**
 ```bash
+# Basic extraction with smart merge (default)
 python mywi.py land readable --name="AsthmaResearch"
-python mywi.py land readable --name="AsthmaResearch" --limit=20
+
+# Process only first 50 pages with depth limit
+python mywi.py land readable --name="AsthmaResearch" --limit=50 --depth=2
+
+# Mercury priority strategy (overwrites existing data)
+python mywi.py land readable --name="AsthmaResearch" --merge=mercury_priority
+
+# Conservative strategy (only fills empty fields)
+python mywi.py land readable --name="AsthmaResearch" --merge=preserve_existing
+
+# Advanced: Limited processing with specific strategy
+python mywi.py land readable --name="AsthmaResearch" --limit=100 --depth=1 --merge=smart_merge
 ```
+
+**Output:** The pipeline provides detailed statistics including:
+- Number of expressions processed
+- Success/error rates
+- Update counts per field type
+- Performance metrics
+
+**Note:** This pipeline replaces the legacy readable functionality, providing better content quality, robustness, and flexible merge strategies for different use cases.
 
 ### Domain Management
 

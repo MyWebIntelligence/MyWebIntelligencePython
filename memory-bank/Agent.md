@@ -27,6 +27,9 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 
 * **mwi/export.py** – Centralised exporter (CSV, GEXF nodes, GEXF pages, media lists, zipped raw corpus).  
 
+* **mwi/readable_pipeline.py** – **NEW: Mercury Parser Autonomous Pipeline**  
+  Standalone system for high-quality content extraction with intelligent merge strategies. Replaces legacy readable functionality with Mercury Parser-based extraction.
+
 * **mwi/model.py** – Peewee ORM schema (SQLite WAL mode). Tables:
   `Land`, `Domain`, `Expression`, `ExpressionLink`, `Word`, `LandDictionary`,
   `Media`, `Tag`, `TaggedContent`.

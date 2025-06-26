@@ -252,25 +252,42 @@ class LandController:
     @staticmethod
     def readable(args: core.Namespace):
         """
-        Fetch readable from Mercury Parser for expressions in land
+        Pipeline Mercury Parser pour l'extraction readable enrichie
         :param args:
         :return:
         """
         core.check_args(args, 'name')
+        
+        # Récupération des paramètres
         fetch_limit = core.get_arg_option('limit', args, set_type=int, default=0)
+        depth_limit = core.get_arg_option('depth', args, set_type=int, default=None)
+        merge_strategy = core.get_arg_option('merge', args, set_type=str, default='smart_merge')
+        
         if fetch_limit > 0:
-            print('Fetch limit set to %s URLs' % fetch_limit)
+            print(f'Fetch limit set to {fetch_limit} URLs')
+        if depth_limit is not None:
+            print(f'Depth limit set to {depth_limit}')
+        print(f'Merge strategy: {merge_strategy}')
+        
         land = model.Land.get_or_none(model.Land.name == args.name)
         if land is None:
             print('Land "%s" not found' % args.name)
-        else:
-            if sys.platform == 'win32':
-                asyncio.set_event_loop(asyncio.ProactorEventLoop())
-            loop = asyncio.get_event_loop()
-            results = loop.run_until_complete(core.readable_land(land, fetch_limit))
-            print("%d expressions processed (%d errors)" % results)
-            return 1
-        return 0
+            return 0
+        
+        # Import du nouveau pipeline
+        from .readable_pipeline import run_readable_pipeline
+        
+        # Configuration de l'event loop selon la plateforme
+        if sys.platform == 'win32':
+            asyncio.set_event_loop(asyncio.ProactorEventLoop())
+        
+        loop = asyncio.get_event_loop()
+        results = loop.run_until_complete(
+            run_readable_pipeline(land, fetch_limit, depth_limit, merge_strategy)
+        )
+        
+        print("%d expressions processed (%d errors)" % results)
+        return 1
 
     @staticmethod
     def export(args: core.Namespace):

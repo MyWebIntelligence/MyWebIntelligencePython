@@ -86,6 +86,11 @@ def command_input():
                         help='Language of the project (default: fr)',
                         default='fr',
                         nargs='?')
+    parser.add_argument('--merge',
+                        type=str,
+                        help='Merge strategy for readable: smart_merge, mercury_priority, preserve_existing',
+                        default='smart_merge',
+                        nargs='?')
     args = parser.parse_args()
     # Always convert lang to a list
     if hasattr(args, "lang") and isinstance(args.lang, str):

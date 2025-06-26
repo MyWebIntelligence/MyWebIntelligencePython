@@ -12,8 +12,8 @@ RUN apt-get update \
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean
-RUN npm install -g yarn \
-    && yarn global add @postlight/parser
+# Install Mercury Parser CLI globally (official package)
+RUN npm install -g @postlight/mercury-parser
 
 WORKDIR /app
 
