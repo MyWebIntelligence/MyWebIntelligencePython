@@ -2,6 +2,7 @@
 Command Line Interface
 """
 import argparse
+from typing import Any
 from .controller import (
     DbController,
     DomainController,
@@ -11,13 +12,14 @@ from .controller import (
 )
 
 
-def command_run(args: dict):
+def command_run(args: Any):
     """
-    Run command from args dict
+    Run command from args dict or namespace
     :param args:
     :return:
     """
-    args = argparse.Namespace(**args)
+    if isinstance(args, dict):
+        args = argparse.Namespace(**args)
     dispatch(args)
 
 
@@ -106,7 +108,8 @@ def dispatch(args):
     """
     controllers = {
         'db': {
-            'setup': DbController.setup
+            'setup': DbController.setup,
+            'migrate': DbController.migrate
         },
         'domain': {
             'crawl': DomainController.crawl
@@ -121,6 +124,7 @@ def dispatch(args):
             'addterm':  LandController.addterm,
             'addurl':   LandController.addurl,
             'consolidate': LandController.consolidate,
+            'medianalyse': LandController.medianalyse,
         },
         'tag': {
             'export': TagController.export,

@@ -23,3 +23,15 @@ heuristics = {
     "pinterest.com": r"([a-z0-9\-_]+\.pinterest\.com/(?!pin)[a-zA-Z0-9\.\-_]+)/?\??",
     "pinterest.fr": r"([a-z0-9\-_]+\.pinterest\.fr/[a-zA-Z0-9\.\-_]+)/?\??",
 }
+
+# Media Analysis Settings
+media_analysis = True
+media_min_width = 200
+media_min_height = 200
+media_max_file_size = 10 * 1024 * 1024  # 10MB
+media_download_timeout = 30
+media_max_retries = 2
+media_analyze_content = False
+media_extract_colors = True
+media_extract_exif = True
+media_n_dominant_colors = 5

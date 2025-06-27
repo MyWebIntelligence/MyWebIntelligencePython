@@ -6,7 +6,7 @@ import json
 import re
 from argparse import Namespace
 from os import path
-from typing import Union
+from typing import Union, Optional
 from urllib.parse import urlparse, urljoin
 
 import aiohttp # type: ignore
@@ -219,12 +219,13 @@ def stem_word(word: str) -> str:
     :param word:
     :return:
     """
-    if 'stemmer' not in stem_word.__dict__: # type: ignore
-        stem_word.stemmer = FrenchStemmer() # type: ignore
-    return str(stem_word.stemmer.stem(word.lower()))
+    if not hasattr(stem_word, "stemmer"):
+        setattr(stem_word, "stemmer", FrenchStemmer())
+    # The following line uses getattr which is safe
+    return str(getattr(stem_word, "stemmer").stem(word.lower()))
 
 
-def crawl_domains(limit: int = 0, http: str = None):
+def crawl_domains(limit: int = 0, http: Optional[str] = None):
     """
     Crawl domains to retrieve info using a pipeline: Trafilatura, Archive.org, then direct requests.
     :param limit: Max number of domains to process.
@@ -600,7 +601,7 @@ def get_keywords(soup: BeautifulSoup) -> str:
     return ""
 
 
-async def crawl_land(land: model.Land, limit: int = 0, http: str = None, depth: int = None) -> tuple:
+async def crawl_land(land: model.Land, limit: int = 0, http: Optional[str] = None, depth: Optional[int] = None) -> tuple:
     """
     Start land crawl
     :param land:
@@ -664,7 +665,7 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None, depth: 
 
             connector = aiohttp.TCPConnector(limit=settings.parallel_connections, ssl=False)
             async with aiohttp.ClientSession(connector=connector) as session:
-                tasks = [crawl_expression(expr, dictionary, session) for expr in current_expressions]
+                tasks = [crawl_expression_with_media_analysis(expr, dictionary, session) for expr in current_expressions]
                 results = await asyncio.gather(*tasks)
                 processed_in_batch = sum(results)
                 total_processed += processed_in_batch
@@ -677,7 +678,188 @@ async def crawl_land(land: model.Land, limit: int = 0, http: str = None, depth: 
 
     return total_processed, total_errors
 
-async def consolidate_land(land: model.Land, limit: int = 0, depth: int = None) -> tuple:
+async def crawl_expression_with_media_analysis(expression: model.Expression, dictionary, session: aiohttp.ClientSession):
+    """
+    Crawl and process an expression with media analysis
+    :param expression: The expression to process.
+    :param dictionary: The land's word dictionary for relevance.
+    :param session: aiohttp.ClientSession for requests.
+    :return: 1 if content was processed, 0 on failure.
+    """
+    print(f"Crawling expression #{expression.id} with media analysis: {expression.url}") # type: ignore
+    content = None
+    raw_html = None
+    links = []
+    status_code_str = "000"  # Default to client error
+    expression.fetched_at = model.datetime.datetime.now() # type: ignore
+
+    # Step 1: Direct HTTP request to get status and content
+    try:
+        async with session.get(expression.url,
+                               headers={"User-Agent": settings.user_agent},
+                               timeout=aiohttp.ClientTimeout(total=15)) as response:
+            status_code_str = str(response.status)
+            if response.status == 200 and 'html' in response.headers.get('content-type', ''):
+                raw_html = await response.text()
+            else:
+                print(f"Direct request for {expression.url} returned status {status_code_str}")
+
+    except aiohttp.ClientError as e:
+        print(f"ClientError for {expression.url}: {e}. Status: 000.")
+        status_code_str = "000"
+    except Exception as e:
+        print(f"Generic exception during initial fetch for {expression.url}: {e}")
+        status_code_str = "ERR"
+
+    expression.http_status = str(status_code_str) # type: ignore
+
+    # Step 2: Try to extract content if we got HTML from the direct request
+    if raw_html:
+        # 2a. Trafilatura on the fetched HTML
+        try:
+            extracted_content = trafilatura.extract(raw_html, include_links=True, include_comments=False, include_images=True, output_format='markdown')
+            readable_html = trafilatura.extract(raw_html, include_links=True, include_comments=False, include_images=True, output_format='html')
+            if extracted_content and len(extracted_content) > 100:
+                # Extraction des médias du readable HTML (corps du texte)
+                media_lines = []
+                if readable_html:
+                    soup_readable = BeautifulSoup(readable_html, 'html.parser')
+                    for tag, label in [('img', 'IMAGE'), ('video', 'VIDEO'), ('audio', 'AUDIO')]:
+                        for element in soup_readable.find_all(tag):
+                            src = element.get('src')
+                            if src:
+                                if tag == 'img':
+                                    media_lines.append(f"![{label}]({src})")
+                                else:
+                                    media_lines.append(f"[{label}: {src}]")
+                content = extracted_content
+                if media_lines:
+                    content += "\n\n" + "\n".join(media_lines)
+                # Enregistrer les médias du readable dans la table Media
+                # 1. Depuis le HTML (si balises <img> présentes)
+                if readable_html:
+                    soup_readable = BeautifulSoup(readable_html, 'html.parser')
+                    extract_medias(soup_readable, expression)
+                # 2. Depuis le markdown (pour les images converties en markdown)
+                img_md_links = re.findall(r'!\[.*?\]\((.*?)\)', content)
+                for img_url in img_md_links:
+                    # Résoudre l'URL relative en URL absolue
+                    resolved_img_url = resolve_url(str(expression.url), img_url)
+                    # Vérifier si déjà présent (éviter doublons)
+                    if not model.Media.select().where((model.Media.expression == expression) & (model.Media.url == resolved_img_url)).exists():
+                        model.Media.create(expression=expression, url=resolved_img_url, type='img')
+                links = extract_md_links(content)
+                expression.readable = content # type: ignore
+                print(f"Trafilatura succeeded on fetched HTML for {expression.url}")
+        except Exception as e:
+            print(f"Trafilatura failed on raw HTML for {expression.url}: {e}")
+
+        # 2b. BeautifulSoup as a fallback on the same HTML
+        if not content:
+            try:
+                soup = BeautifulSoup(raw_html, 'html.parser')
+                clean_html(soup)
+                text_content = get_readable(soup)
+                if text_content and len(text_content) > 100:
+                    content = text_content
+                    urls = [a.get('href') for a in soup.find_all('a') if is_crawlable(a.get('href'))]
+                    links = urls
+                    expression.readable = content # type: ignore
+                    print(f"BeautifulSoup fallback succeeded for {expression.url}")
+            except Exception as e:
+                print(f"BeautifulSoup fallback failed for {expression.url}: {e}")
+
+    # Step 3: If no content yet (e.g., non-200 status, or parsing failed), try URL-based fallbacks
+    if not content:
+        # 3b. Archive.org (if Mercury also fails)
+        if not content:
+            try:
+                print(f"Trying URL-based fallback: archive.org for {expression.url}")
+                archive_data_url = f"http://archive.org/wayback/available?url={expression.url}"
+                archive_response = await asyncio.to_thread(lambda: requests.get(archive_data_url, timeout=10))
+                archive_response.raise_for_status()
+                archive_data = archive_response.json()
+                archived_url = archive_data.get('archived_snapshots', {}).get('closest', {}).get('url')
+                if archived_url:
+                    downloaded = await asyncio.to_thread(trafilatura.fetch_url, archived_url)
+                    if downloaded:
+                        raw_html = downloaded
+                        extracted_content = trafilatura.extract(downloaded, include_links=True, include_images=True, output_format='markdown')
+                        readable_html = trafilatura.extract(downloaded, include_links=True, include_images=True, output_format='html')
+                        if extracted_content and len(extracted_content) > 100:
+                            # Extraction des médias du readable HTML (corps du texte archivé)
+                            media_lines = []
+                            if readable_html:
+                                soup_readable = BeautifulSoup(readable_html, 'html.parser')
+                                for tag, label in [('img', 'IMAGE'), ('video', 'VIDEO'), ('audio', 'AUDIO')]:
+                                    for element in soup_readable.find_all(tag):
+                                        src = element.get('src')
+                                        if src:
+                                            if tag == 'img':
+                                                media_lines.append(f"![{label}]({src})")
+                                            else:
+                                                media_lines.append(f"[{label}: {src}]")
+                            content = extracted_content
+                            if media_lines:
+                                content += "\n\n" + "\n".join(media_lines)
+                            # Enregistrer les médias du readable archivé dans la table Media
+                            # 1. Depuis le HTML (si balises <img> présentes)
+                            if readable_html:
+                                soup_readable = BeautifulSoup(readable_html, 'html.parser')
+                                extract_medias(soup_readable, expression)
+                            # 2. Depuis le markdown (pour les images converties en markdown)
+                            img_md_links = re.findall(r'!\[.*?\]\((.*?)\)', content)
+                            for img_url in img_md_links:
+                                # Résoudre l'URL relative en URL absolue
+                                resolved_img_url = resolve_url(str(expression.url), img_url)
+                                if not model.Media.select().where((model.Media.expression == expression) & (model.Media.url == resolved_img_url)).exists():
+                                    model.Media.create(expression=expression, url=resolved_img_url, type='img')
+                            links = extract_md_links(content)
+                            expression.readable = content # type: ignore
+                            print(f"Archive.org + Trafilatura succeeded for {expression.url}")
+            except Exception as e:
+                print(f"Archive.org fallback failed for {expression.url}: {e}")
+
+    # Final processing and saving
+    if content:
+        soup = BeautifulSoup(raw_html if raw_html else content, 'html.parser')
+        expression.title = str(get_title(soup) or expression.url) # type: ignore
+        expression.description = str(get_description(soup)) if get_description(soup) else None # type: ignore
+        expression.keywords = str(get_keywords(soup)) if get_keywords(soup) else None # type: ignore
+        expression.lang = str(soup.html.get('lang', '')) if soup.html else '' # type: ignore
+        expression.relevance = expression_relevance(dictionary, expression) # type: ignore
+        expression.readable_at = model.datetime.datetime.now() # type: ignore
+        if expression.relevance is not None and expression.relevance > 0: # type: ignore
+            expression.approved_at = model.datetime.datetime.now() # type: ignore
+        model.ExpressionLink.delete().where(model.ExpressionLink.source == expression.id).execute() # type: ignore
+
+        # Extract dynamic media using headless browser (only for approved expressions)
+        if (expression.relevance is not None and expression.relevance > 0 and # type: ignore
+            settings.dynamic_media_extraction and PLAYWRIGHT_AVAILABLE):
+            try:
+                print(f"Attempting dynamic media extraction for #{expression.id}") # type: ignore
+                dynamic_media_urls = await extract_dynamic_medias(str(expression.url), expression)
+                if dynamic_media_urls:
+                    print(f"Dynamic extraction found {len(dynamic_media_urls)} additional media items for #{expression.id}") # type: ignore
+                else:
+                    print(f"No dynamic media found for #{expression.id}") # type: ignore
+            except Exception as e:
+                print(f"Dynamic media extraction failed for #{expression.id}: {e}") # type: ignore
+        elif expression.relevance is not None and expression.relevance > 0 and settings.dynamic_media_extraction and not PLAYWRIGHT_AVAILABLE: # type: ignore
+            print(f"Dynamic media extraction requested but Playwright not available for #{expression.id}") # type: ignore
+
+        if expression.relevance is not None and expression.relevance > 0 and expression.depth is not None and expression.depth < 3 and links: # type: ignore
+            print(f"Linking {len(links)} expressions to #{expression.id}") # type: ignore
+            for link in links:
+                link_expression(expression.land, expression, link) # type: ignore
+        expression.save()
+        return 1
+    else:
+        print(f"All extraction methods failed for {expression.url}. Final status: {expression.http_status}")
+        expression.save()
+        return 0
+
+async def consolidate_land(land: model.Land, limit: int = 0, depth: Optional[int] = None) -> tuple:
     """
     Consolidate a land: for each expression, recalculate relevance, links, media, add missing docs, recreate links, replace old ones.
     :param land:
@@ -922,7 +1104,7 @@ async def crawl_expression(expression: model.Expression, dictionary, session: ai
         if expression.relevance is not None and expression.relevance > 0: # type: ignore
             expression.approved_at = model.datetime.datetime.now() # type: ignore
         model.ExpressionLink.delete().where(model.ExpressionLink.source == expression.id).execute() # type: ignore
-        
+
         # Extract dynamic media using headless browser (only for approved expressions)
         if (expression.relevance is not None and expression.relevance > 0 and # type: ignore
             settings.dynamic_media_extraction and PLAYWRIGHT_AVAILABLE):
@@ -937,7 +1119,7 @@ async def crawl_expression(expression: model.Expression, dictionary, session: ai
                 print(f"Dynamic media extraction failed for #{expression.id}: {e}") # type: ignore
         elif expression.relevance is not None and expression.relevance > 0 and settings.dynamic_media_extraction and not PLAYWRIGHT_AVAILABLE: # type: ignore
             print(f"Dynamic media extraction requested but Playwright not available for #{expression.id}") # type: ignore
-        
+
         if expression.relevance is not None and expression.relevance > 0 and expression.depth is not None and expression.depth < 3 and links: # type: ignore
             print(f"Linking {len(links)} expressions to #{expression.id}") # type: ignore
             for link in links:
@@ -948,6 +1130,79 @@ async def crawl_expression(expression: model.Expression, dictionary, session: ai
         print(f"All extraction methods failed for {expression.url}. Final status: {expression.http_status}")
         expression.save()
         return 0
+
+    # Step 4: Analyze media if enabled
+    if settings.media_analysis:
+        try:
+            media_analysis_results = await analyze_media(expression, session)
+            if media_analysis_results:
+                print(f"Media analysis found {len(media_analysis_results)} media items for #{expression.id}") # type: ignore
+            else:
+                print(f"No media found for #{expression.id}") # type: ignore
+        except Exception as e:
+            print(f"Media analysis failed for #{expression.id}: {e}") # type: ignore
+
+    return 1
+
+async def analyze_media(expression: model.Expression, session: aiohttp.ClientSession) -> list:
+    """
+    Analyze media for an expression using MediaAnalyzer
+    :param expression: The expression to analyze media for
+    :param session: aiohttp.ClientSession for requests.
+    :return: List of analyzed media items
+    """
+    from .media_analyzer import MediaAnalyzer
+    media_settings = {
+        'user_agent': settings.user_agent,
+        'min_width': getattr(settings, 'media_min_width', 100),
+        'min_height': getattr(settings, 'media_min_height', 100),
+        'max_file_size': getattr(settings, 'media_max_file_size', 10 * 1024 * 1024),
+        'download_timeout': getattr(settings, 'media_download_timeout', 30),
+        'max_retries': getattr(settings, 'media_max_retries', 2),
+        'analyze_content': getattr(settings, 'media_analyze_content', False),
+        'extract_colors': getattr(settings, 'media_extract_colors', True),
+        'extract_exif': getattr(settings, 'media_extract_exif', True),
+        'n_dominant_colors': getattr(settings, 'media_n_dominant_colors', 5)
+    }
+    analyzer = MediaAnalyzer(session, media_settings)
+    analyzed_medias = []
+
+    # Get all media URLs associated with this expression
+    media_items = model.Media.select().where(model.Media.expression == expression)
+
+    for media in media_items:
+        try:
+            analysis_result = await analyzer.analyze_image(media.url)
+            if analysis_result:
+                # Update media record with analysis results
+                media.width = analysis_result.get('width')
+                media.height = analysis_result.get('height')
+                media.file_size = analysis_result.get('file_size')
+                media.format = analysis_result.get('format')
+                media.color_mode = analysis_result.get('color_mode')
+                media.dominant_colors = json.dumps(analysis_result.get('dominant_colors', []))
+                media.has_transparency = analysis_result.get('has_transparency')
+                media.aspect_ratio = analysis_result.get('aspect_ratio')
+                media.exif_data = json.dumps(analysis_result.get('exif_data', {}))
+                media.image_hash = analysis_result.get('image_hash')
+                media.content_tags = json.dumps(analysis_result.get('content_tags', []))
+                media.nsfw_score = analysis_result.get('nsfw_score')
+                media.analyzed_at = model.datetime.datetime.now()
+                media.analysis_error = None
+                media.save()
+
+                analyzed_medias.append(media.url)
+                print(f"Analyzed media: {media.url}")
+            else:
+                print(f"No analysis result for media: {media.url}")
+        except Exception as e:
+            print(f"Error analyzing media {media.url}: {e}")
+            # Update media record with error
+            media.analysis_error = str(e)
+            media.analyzed_at = model.datetime.datetime.now()
+            media.save()
+
+    return analyzed_medias
 
 
 def extract_md_links(md_content: str):
@@ -1314,3 +1569,41 @@ def update_heuristic():
 def delete_media(land: model.Land, max_width: int = 0, max_height: int = 0, max_size: int = 0):
     expressions = model.Expression.select().where(model.Land == land)
     model.Media.delete().where(model.Media.expression << expressions)
+
+async def medianalyse_land(land: model.Land) -> dict:
+    """
+    Analyse les médias pour un land donné.
+    """
+    from .media_analyzer import MediaAnalyzer
+    
+    processed_count = 0
+    
+    async with aiohttp.ClientSession() as session:
+        analyzer = MediaAnalyzer(session, {
+            'user_agent': settings.user_agent,
+            'min_width': settings.media_min_width,
+            'min_height': settings.media_min_height,
+            'max_file_size': settings.media_max_file_size,
+            'download_timeout': settings.media_download_timeout,
+            'max_retries': settings.media_max_retries,
+            'analyze_content': settings.media_analyze_content,
+            'extract_colors': settings.media_extract_colors,
+            'extract_exif': settings.media_extract_exif,
+            'n_dominant_colors': settings.media_n_dominant_colors
+        })
+        
+        medias = model.Media.select().join(model.Expression).where(model.Expression.land == land)
+        
+        for media in medias:
+            print(f'Analyse de {media.url}')
+            result = await analyzer.analyze_image(media.url)
+            
+            for field, value in result.items():
+                if hasattr(media, field):
+                    setattr(media, field, value)
+            
+            media.analyzed_at = model.datetime.datetime.now()
+            media.save()
+            processed_count += 1
+
+    return {'processed': processed_count}

@@ -4,8 +4,10 @@ Application controller
 import asyncio
 import os
 import sys
+from typing import Any
 
 from peewee import JOIN, fn
+import aiohttp
 
 import settings
 from . import core
@@ -16,6 +18,16 @@ class DbController:
     """
     Db controller class
     """
+
+    @staticmethod
+    def migrate(args: core.Namespace):
+        """
+        Exécute les migrations de base de données.
+        """
+        from migrations.migrate import MigrationManager
+        manager = MigrationManager()
+        manager.run_pending_migrations()
+        return 1
 
     @staticmethod
     def setup(args: core.Namespace):
@@ -32,14 +44,103 @@ class DbController:
             model.DB.create_tables(tables)
             print("Model created, setup complete")
             return 1
-        print("Database setup aborted")
-        return 0
+
+    @staticmethod
+    def medianalyse(args: core.Namespace):
+        """
+        Analyse séquentielle des médias pour un land en batch
+        """
+        core.check_args(args, 'name')
+        depth = core.get_arg_option('depth', args, set_type=int, default=0)
+        minrel = core.get_arg_option('minrel', args, set_type=float, default=0.0)
+        from .media_analyzer import MediaAnalyzer
+        from datetime import datetime
+        
+        land = model.Land.get_or_none(model.Land.name == args.name)
+        if land is None:
+            print(f'Land "{args.name}" introuvable')
+            return 0
+        
+        query = model.Expression.select().where(model.Expression.land == land)
+        if depth > 0:
+            query = query.where(model.Expression.depth <= depth)
+        if minrel > 0:
+            query = query.where(model.Expression.relevance >= minrel)
+            
+        expressions = list(query)
+        print(f'Début de l\'analyse médias pour le land "{land.name}" avec {len(expressions)} expressions')
+        
+        async def process():
+            connector = aiohttp.TCPConnector(limit=1, ssl=False)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                analyzer = MediaAnalyzer(session, {
+                    'user_agent': settings.user_agent,
+                    'min_width': settings.media_min_width,
+                    'min_height': settings.media_min_height,
+                    'max_file_size': settings.media_max_file_size,
+                    'download_timeout': settings.media_download_timeout,
+                    'max_retries': settings.media_max_retries,
+                    'analyze_content': settings.media_analyze_content,
+                    'extract_colors': settings.media_extract_colors,
+                    'extract_exif': settings.media_extract_exif,
+                    'n_dominant_colors': settings.media_n_dominant_colors
+                })
+                for expr in expressions:
+                    if not hasattr(expr, 'medias'):
+                        continue
+                    for media in expr.medias:
+                        print(f'Analyse média #{media.id}: {media.url}')
+                        result = await analyzer.analyze_image(str(media.url))
+                        for field, value in result.items():
+                            if hasattr(media, field) and field != 'error':
+                                setattr(media, field, value)
+                        media.analyzed_at = datetime.now()
+                        if 'error' in result:
+                            media.analysis_error = result['error']
+                        media.save()
+                        print('  =>', 'Erreur:' + str(result.get('error', '')) if 'error' in result else 'OK')
+
+        if sys.platform == 'win32':
+            asyncio.set_event_loop(asyncio.ProactorEventLoop())
+        loop = asyncio.get_event_loop()
+        
+        try:
+            loop.run_until_complete(process())
+        except KeyboardInterrupt:
+            print('Analyse interrompue par l\'utilisateur')
+        
+        return 1
 
 
 class LandController:
     """
     Land controller class
     """
+
+    @staticmethod
+    def medianalyse(args: core.Namespace):
+        """
+        Analyse médias pour un land
+        """
+        core.check_args(args, 'name')
+        land = model.Land.get_or_none(model.Land.name == args.name)
+        if not land:
+            print(f'Land "{args.name}" introuvable')
+            return 0
+            
+        print(f'Début analyse média pour {args.name}')
+        from .media_analyzer import MediaAnalyzer
+        loop = asyncio.get_event_loop()
+        if sys.platform == 'win32':
+            asyncio.set_event_loop(asyncio.ProactorEventLoop())
+            
+        try:
+            result = loop.run_until_complete(core.medianalyse_land(land))
+            print(f"Analyse terminée : {result['processed']} médias traités")
+            return 1
+        except Exception as e:
+            print(f"Erreur lors de l'analyse : {str(e)}")
+            return 0
 
     @staticmethod
     def consolidate(args: core.Namespace):
@@ -142,7 +243,7 @@ class LandController:
         # Store lang as comma-separated string
         lang_str = ",".join(args.lang) if isinstance(args.lang, list) else str(args.lang)
         land = model.Land.create(name=args.name, description=args.desc, lang=lang_str)
-        os.makedirs(os.path.join(settings.data_location, 'lands/%s') % land.get_id(), exist_ok=True)
+        os.makedirs(os.path.join(settings.data_location, 'lands/%s') % land.id, exist_ok=True)
         print('Land "%s" created' % args.name)
         return 1
 
@@ -162,7 +263,7 @@ class LandController:
                 with model.DB.atomic():
                     lemma = ' '.join([core.stem_word(w) for w in term.split(' ')])
                     word, _ = model.Word.get_or_create(term=term, lemma=lemma)
-                    model.LandDictionary.create(land=land.get_id(), word=word.get_id())
+                    model.LandDictionary.create(land=land.id, word=word.id)
                     print('Term "%s" created in land %s' % (term, args.land))
             core.land_relevance(land)
             return 1

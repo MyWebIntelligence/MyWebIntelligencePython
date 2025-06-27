@@ -23,6 +23,7 @@ MyWebIntelligence (MyWI) is a Python-based tool designed to assist researchers i
 *   **Land Creation & Management**: Organize your research into "lands," which are thematic collections of terms and URLs.
 *   **Web Crawling**: Crawl URLs associated with your lands to gather web page content.
 *   **Content Extraction**: Process crawled pages to extract readable content.
+*   **Media Analysis & Filtering**: Automatic extraction and analysis of images, videos, and audio. Extracts metadata (dimensions, size, format, dominant colors, EXIF), supports intelligent filtering and deletion, duplicate detection, and batch asynchronous processing.
 *   **Enhanced Media Detection**: Detects media files with both uppercase and lowercase extensions (.JPG, .jpg, .PNG, .png, etc.).
 *   **Dynamic Media Extraction**: Optional headless browser-based extraction for JavaScript-generated and lazy-loaded media content.
 *   **Domain Analysis**: Gather information about domains encountered during crawling.
@@ -62,6 +63,7 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 ### Main Workflows
 
 - **Project Bootstrap**: `python mywi.py db setup`
+- **Media Analysis**: `python mywi.py db medianalyse --name=LAND_NAME [--depth=DEPTH] [--minrel=MIN_RELEVANCE]`
 - **Land Life-Cycle**: Create, add terms, add URLs, crawl, extract readable, export, clean/delete.
 - **Domain Processing**: `python mywi.py domain crawl`
 - **Tag Export**: `python mywi.py tag export`
@@ -419,7 +421,7 @@ Extract high-quality, readable content using the **Mercury Parser autonomous pip
 
 **Prerequisites:** Requires `mercury-parser` CLI tool installed:
 ```bash
-npm install -g @postlight/mercury-parser
+sudo npm install -g @postlight/mercury-parser
 ```
 
 **Command:**
@@ -517,6 +519,32 @@ Export data from your lands or tags for analysis in other tools.
 #### 1. Export Land Data
 
 Export data from a land in various formats.
+
+#### 2. Media Analysis
+
+Analyze media files (images, videos, audio) associated with expressions in a land. This command will fetch media, analyze its properties, and store the results in the database.
+
+```bash
+python mywi.py db medianalyse --name=LAND_NAME [--depth=DEPTH] [--minrel=MIN_RELEVANCE]
+```
+
+| Option | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--name` | str | Yes | | Name of the land to analyze media for. |
+| `--depth` | int | No | 0 | Only analyze media for expressions up to this crawl depth. |
+| `--minrel` | float | No | 0.0 | Only analyze media for expressions with relevance greater than or equal to this value. |
+
+**Example:**
+```bash
+python mywi.py db medianalyse --name="AsthmaResearch" --depth=2 --minrel=0.5
+```
+
+**Notes:**
+- This process downloads media files to perform detailed analysis.
+- Configuration for media analysis (e.g., `media_min_width`, `media_max_file_size`) can be found in `settings.py`.
+- The results, including dimensions, file size, format, dominant colors, EXIF data, and perceptual hash, are stored in the database.
+
+---
 
 ```bash
 python mywi.py land export --name="MyResearchTopic" --type=EXPORT_TYPE [--minrel=MINIMUM_RELEVANCE]

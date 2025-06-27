@@ -6,6 +6,29 @@ Ce document décrit les flux de travail utilisés dans cette application pour ex
 
 Ce flux est initié par la commande `mwi land crawl` et est conçu pour une collecte rapide et à grande échelle.
 
+---
+
+## 0. Pipeline d'analyse média (NOUVEAU)
+
+Ce pipeline s'intègre à tous les flux (crawl, readable, consolidation) et permet :
+
+- Extraction automatique des images, vidéos, audio lors du crawl ou de la consolidation.
+- Analyse des métadonnées (dimensions, taille, format, couleurs dominantes, EXIF, hash perceptuel, tags de contenu, etc.).
+- Filtrage intelligent et suppression des médias non conformes (par taille, format, etc.).
+- Détection de doublons (hash perceptuel).
+- Statistiques avancées sur les médias (distribution des formats, tailles, couleurs, etc.).
+- Traitement asynchrone par batch pour la performance.
+- Commandes CLI dédiées :
+    - `python mywi.py land medianalyse --name=LAND`
+    - `python mywi.py land reanalyze --name=LAND [--minwidth=300 --minheight=300 --suppress]`
+    - `python mywi.py land preview_deletion --name=LAND --minwidth=200 --maxsize=5`
+    - `python mywi.py land media_stats --name=LAND`
+    - `python mywi.py land export --name=LAND --type=mediacsv`
+
+**Voir README et MediaFeaturePlan.md pour la documentation complète.**
+
+---
+
 **Chaîne d'appels :**
 `LandController.crawl` → `core.crawl_land` → `core.crawl_expression` → `core.process_expression_content`
 

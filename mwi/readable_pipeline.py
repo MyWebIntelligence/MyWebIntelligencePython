@@ -115,7 +115,8 @@ class MercuryReadablePipeline:
         """Récupère les expressions à traiter selon les critères"""
         query = model.Expression.select().where(
             (model.Expression.land == land) &
-            (model.Expression.approved_at.is_null(False))
+            (model.Expression.approved_at.is_null(False)) &
+            (model.Expression.readable_at.is_null(True))
         )
 
         # Filtre par profondeur si spécifié
@@ -159,6 +160,7 @@ class MercuryReadablePipeline:
         Traite une expression unique avec Mercury Parser
         """
         try:
+            print(f"🔄 Processing URL: {expression.url}")
             # Extraction avec Mercury Parser
             mercury_result = await self._extract_with_mercury(str(expression.url))
 
@@ -169,14 +171,15 @@ class MercuryReadablePipeline:
             # Préparation de la mise à jour
             update = self._prepare_expression_update(expression, mercury_result)
 
-            if not update.field_updates and not update.media_additions and not update.link_additions:
-                self.logger.debug(f"No updates needed for {expression.url}")
-                self.stats['skipped'] += 1
-                return None
-
-            # Application des mises à jour
+            # Application des mises à jour (même si aucune modification pour timestamp)
             self._apply_updates(expression, update, dictionary)
-            self.stats['updated'] += 1
+            
+            if not update.field_updates and not update.media_additions and not update.link_additions:
+                self.logger.debug(f"No content updates needed for {expression.url}")
+                self.stats['skipped'] += 1
+                print(f"⏩ Skipped URL (no changes): {expression.url}")
+            else:
+                self.stats['updated'] += 1
 
             return update
 
@@ -439,6 +442,7 @@ class MercuryReadablePipeline:
 
         # Mise à jour du timestamp
         setattr(expression, 'readable_at', datetime.now())
+        print(f"🕒 Updated timestamp for URL {expression.url}: {expression.readable_at}")
 
         # Recalcul de la pertinence si le contenu a changé
         if 'readable' in update.field_updates:
@@ -563,6 +567,15 @@ async def run_readable_pipeline(land: model.Land,
         merge_strategy=strategy_map.get(merge_strategy, MergeStrategy.SMART_MERGE)
     )
 
-    stats = await pipeline.process_land(land, limit, depth)
+    print(f"🚀 Starting readable pipeline for land: {land.name}")
+    print(f"🔧 Merge strategy: {merge_strategy}")
+    print(f"📦 Processing limit: {limit or 'unlimited'}, depth: {depth or 'all'}")
 
-    return stats['processed'], stats['errors']
+    try:
+        stats = await pipeline.process_land(land, limit, depth)
+        print(f"✅ Completed processing {stats['processed']} expressions")
+        print(f"✔️ Updated: {stats['updated']}, Errors: {stats['errors']}, Skipped: {stats['skipped']}")
+        return stats['processed'], stats['errors']
+    except Exception as e:
+        print(f"❌ Pipeline failed: {str(e)}")
+        raise

@@ -8,6 +8,7 @@
 ```
 mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.py
                                      ↘︎ peewee ORM models (mwi/model.py)
+                                     ↘︎ media analysis (mwi/media_analyzer.py)
 ```
 
 * **mywi.py**  
@@ -33,6 +34,12 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 * **mwi/model.py** – Peewee ORM schema (SQLite WAL mode). Tables:
   `Land`, `Domain`, `Expression`, `ExpressionLink`, `Word`, `LandDictionary`,
   `Media`, `Tag`, `TaggedContent`.
+
+* **mwi/media_analyzer.py** – **NEW: Media Analysis Pipeline**
+  - Asynchronous batch analysis of images, videos, and audio.
+  - Extracts metadata (dimensions, size, format, dominant colors, EXIF, hash, tags).
+  - Intelligent filtering, duplicate detection, and statistics.
+  - CLI: `land medianalyse`, `land reanalyze`, `land preview_deletion`, `land media_stats`, `land export --type=mediacsv`
 
 ---
 

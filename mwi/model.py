@@ -5,6 +5,7 @@ Core Model definition
 from os import path
 import settings
 import datetime
+import json
 from peewee import (
     SqliteDatabase,
     Model,
@@ -13,7 +14,9 @@ from peewee import (
     DateTimeField,
     ForeignKeyField,
     IntegerField,
-    CompositeKey
+    CompositeKey,
+    BooleanField,
+    FloatField
 )
 
 DB = SqliteDatabase(path.join(settings.data_location, 'mwi.db'), pragmas={
@@ -92,6 +95,7 @@ class ExpressionLink(BaseModel):
         Meta class to set composite primary key
         """
         primary_key = CompositeKey('source', 'target')
+        table_name = 'expressionlink'
 
     source = ForeignKeyField(Expression, backref='links_to', on_delete='CASCADE')
     target = ForeignKeyField(Expression, backref='linked_by', on_delete='CASCADE')
@@ -115,6 +119,7 @@ class LandDictionary(BaseModel):
         Meta class to set composite primary key
         """
         primary_key = CompositeKey('land', 'word')
+        table_name = 'landdictionary'
 
     land = ForeignKeyField(Land, backref='words', on_delete='CASCADE')
     word = ForeignKeyField(Word, backref='lands', on_delete='CASCADE')
@@ -122,11 +127,91 @@ class LandDictionary(BaseModel):
 
 class Media(BaseModel):
     """
-    Media model
+    Media model enrichi avec analyse
     """
     expression = ForeignKeyField(Expression, backref='medias', on_delete='CASCADE')
     url = TextField()
     type = CharField(max_length=30)
+    
+    # Dimensions et métadonnées
+    width = IntegerField(null=True)
+    height = IntegerField(null=True)
+    file_size = IntegerField(null=True)
+    format = CharField(max_length=10, null=True)
+    color_mode = CharField(max_length=10, null=True)
+    
+    # Analyse visuelle
+    dominant_colors = TextField(null=True)
+    has_transparency = BooleanField(null=True)
+    aspect_ratio = FloatField(null=True)
+    
+    # Métadonnées avancées
+    exif_data = TextField(null=True)
+    image_hash = CharField(max_length=64, null=True)
+    
+    # Analyse de contenu
+    content_tags = TextField(null=True)
+    nsfw_score = FloatField(null=True)
+    
+    # Traitement
+    analyzed_at = DateTimeField(null=True)
+    analysis_error = TextField(null=True)
+    websafe_colors = TextField(null=True)
+    
+    class Meta:
+        table_name = 'media'
+        indexes = (
+            (('width', 'height'), False),
+            (('file_size',), False),
+            (('image_hash',), False),
+            (('analyzed_at',), False),
+        )
+    
+    def is_conforming(self, min_width: int = 0, min_height: int = 0, max_file_size: int = 0) -> bool:
+        """Vérifie la conformité aux critères"""
+        try:
+            # Assurer que les valeurs sont des nombres avant la comparaison
+            width = self.width if self.width is not None else 0
+            height = self.height if self.height is not None else 0
+            file_size = self.file_size if self.file_size is not None else 0
+
+            if min_width > 0 and width < min_width:
+                return False
+            if min_height > 0 and height < min_height:
+                return False
+            if max_file_size > 0 and file_size > max_file_size:
+                return False
+        except (ValueError, TypeError):
+            # En cas d'erreur de conversion ou de type, considérer non conforme
+            return False
+        return True
+
+    def get_dominant_colors_list(self):
+        """Retourne la liste des couleurs dominantes"""
+        if self.dominant_colors and isinstance(self.dominant_colors, str):
+            try:
+                return json.loads(self.dominant_colors)
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    def get_exif_dict(self):
+        """Retourne le dictionnaire EXIF"""
+        if self.exif_data and isinstance(self.exif_data, str):
+            try:
+                return json.loads(self.exif_data)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    def get_content_tags_list(self):
+        """Retourne la liste des tags de contenu"""
+        if self.content_tags and isinstance(self.content_tags, str):
+            try:
+                return json.loads(self.content_tags)
+            except json.JSONDecodeError:
+                return []
+        return []
 
 
 """
