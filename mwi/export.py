@@ -523,7 +523,7 @@ class Export:
 
     def write_corpus(self, filename) -> int:
         """
-        Write CSV file
+        Write corpus files in multiple ZIP archives with max 1000 expressions each
         :param filename:
         :return:
         """
@@ -548,16 +548,44 @@ class Export:
 
         cursor = self.get_sql_cursor(sql, col_map)
         count = 0
-
-        with ZipFile(filename, 'w') as arch:
-            for row in cursor:
-                count += 1
-                row = dict(zip(col_map.keys(), row))
-                filename = '{}-{}.txt'.format(row.get('id'), self.slugify(row.get('title', '')))
-                data = self.to_metadata(row) + row.get('readable', '')
-                arch.writestr(filename, data)
-        arch.close()
-
+        batch_size = 1000
+        batch_count = 0
+        current_batch = 0
+        
+        # Enlever l'extension .zip du nom de fichier de base
+        base_filename = filename.replace('.zip', '')
+        
+        arch = None
+        
+        for row in cursor:
+            # Créer un nouveau ZIP toutes les 1000 expressions
+            if current_batch == 0:
+                batch_count += 1
+                if arch:
+                    arch.close()
+                
+                # Créer le nom du fichier avec numérotation : nom_00001.zip, nom_00002.zip, etc.
+                batch_filename = f"{base_filename}_{batch_count:05d}.zip"
+                arch = ZipFile(batch_filename, 'w')
+                print(f"Création du fichier ZIP : {batch_filename}")
+            
+            count += 1
+            current_batch += 1
+            
+            row = dict(zip(col_map.keys(), row))
+            txt_filename = '{}-{}.txt'.format(row.get('id'), self.slugify(row.get('title', '')))
+            data = self.to_metadata(row) + row.get('readable', '')
+            arch.writestr(txt_filename, data)
+            
+            # Reset le compteur de batch si on atteint 1000
+            if current_batch >= batch_size:
+                current_batch = 0
+        
+        # Fermer le dernier ZIP
+        if arch:
+            arch.close()
+        
+        print(f"Export terminé : {count} expressions réparties dans {batch_count} fichiers ZIP")
         return count
 
     def slugify(self, string):
