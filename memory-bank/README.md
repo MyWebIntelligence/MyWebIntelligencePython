@@ -23,6 +23,9 @@ MyWebIntelligence (MyWI) is a Python-based tool designed to assist researchers i
 *   **Land Creation & Management**: Organize your research into "lands," which are thematic collections of terms and URLs.
 *   **Web Crawling**: Crawl URLs associated with your lands to gather web page content.
 *   **Content Extraction**: Process crawled pages to extract readable content.
+*   **Media Analysis & Filtering**: Automatic extraction and analysis of images, videos, and audio. Extracts metadata (dimensions, size, format, dominant colors, EXIF), supports intelligent filtering and deletion, duplicate detection, and batch asynchronous processing.
+*   **Enhanced Media Detection**: Detects media files with both uppercase and lowercase extensions (.JPG, .jpg, .PNG, .png, etc.).
+*   **Dynamic Media Extraction**: Optional headless browser-based extraction for JavaScript-generated and lazy-loaded media content.
 *   **Domain Analysis**: Gather information about domains encountered during crawling.
 *   **Data Export**: Export collected data in various formats (CSV, GEXF, raw corpus) for further analysis.
 *   **Tag-based Analysis**: Export tag matrices and content for deeper insights.
@@ -60,6 +63,7 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 ### Main Workflows
 
 - **Project Bootstrap**: `python mywi.py db setup`
+- **Media Analysis**: `python mywi.py db medianalyse --name=LAND_NAME [--depth=DEPTH] [--minrel=MIN_RELEVANCE]`
 - **Land Life-Cycle**: Create, add terms, add URLs, crawl, extract readable, export, clean/delete.
 - **Domain Processing**: `python mywi.py domain crawl`
 - **Tag Export**: `python mywi.py tag export`
@@ -69,7 +73,8 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 
 - **Relevance Score**: Weighted sum of lemma hits in title/content.
 - **Async Batching**: Polite concurrency for crawling.
-- **Media Extraction**: Only `.jpg` images kept, media saved for later download.
+- **Media Extraction**: Enhanced detection for multiple formats (.jpg, .jpeg, .png, .gif, .webp, .bmp, .svg, .mp4, .webm, .ogg, .ogv, .mov, .avi, .mkv, .mp3, .wav, .aac, .flac, .m4a), media saved for later download.
+- **Dynamic Media Extraction**: Optional headless browser-based extraction for JavaScript-generated and lazy-loaded media content.
 - **Export**: Multiple formats, dynamic SQL, GEXF with attributes.
 
 ### Settings
@@ -156,6 +161,18 @@ You can install MyWI using Docker (recommended for ease of use) or by setting up
     ```
     You are now ready to use MyWI commands as described in the [Usage](#usage) section.
 
+**Note on Dynamic Media Extraction:**
+The Docker image includes Playwright and Chromium browser for enhanced media detection. This enables:
+- Detection of JavaScript-generated media content
+- Extraction of lazy-loaded images
+- Support for dynamic content that requires browser rendering
+
+To test the dynamic media extraction functionality:
+```bash
+# Inside the Docker container
+python test_dynamic_media.py
+```
+
 ### Local Development Setup
 
 **Prerequisites:**
@@ -205,11 +222,23 @@ You can install MyWI using Docker (recommended for ease of use) or by setting up
     (venv) pip install -r requirements.txt
     ```
 
-6.  **Setup Database:**
+6.  **Install Playwright Browsers (Optional - for Dynamic Media Extraction):**
+    ```bash
+    (venv) python install_playwright.py
+    ```
+    This step is optional but recommended if you want to use the dynamic media extraction feature for JavaScript-generated content.
+
+7.  **Setup Database:**
     ```bash
     (venv) python mywi.py db setup
     ```
     This command creates the database file in the `data_location` you specified. Warning: it will destroy any previous data if the database file already exists from a prior setup.
+
+8.  **Test Installation (Optional):**
+    ```bash
+    (venv) python test_dynamic_media.py
+    ```
+    This tests both basic URL resolution and dynamic media extraction (if Playwright is installed).
 
 You are now ready to use MyWI commands as described in the [Usage](#usage) section using `(venv) python mywi.py ...`.
 
@@ -387,24 +416,78 @@ python mywi.py land crawl --name="AsthmaResearch" --depth=1 --limit=5
 
 ---
 
-#### 2. Fetch Readable Content
+#### 2. Fetch Readable Content (Mercury Parser Pipeline)
 
-Extract a cleaner, more readable version of the crawled page content (requires Mercury Parser CLI).
+Extract high-quality, readable content using the **Mercury Parser autonomous pipeline**. This modern system provides intelligent content extraction with configurable merge strategies and automatic media/link enrichment.
 
+**Prerequisites:** Requires `mercury-parser` CLI tool installed:
 ```bash
-python mywi.py land readable --name="MyResearchTopic" [--limit=NUMBER]
+sudo npm install -g @postlight/mercury-parser
+```
+
+**Command:**
+```bash
+python mywi.py land readable --name="MyResearchTopic" [--limit=NUMBER] [--depth=NUMBER] [--merge=STRATEGY]
 ```
 
 | Option   | Type   | Required | Default | Description                                         |
 |----------|--------|----------|---------|-----------------------------------------------------|
 | --name   | str    | Yes      |         | Name of the land to process                         |
 | --limit  | int    | No       |         | Maximum number of pages to process in this run      |
+| --depth  | int    | No       |         | Maximum crawl depth to process (e.g., 2 = seeds + 2 levels) |
+| --merge  | str    | No       | smart_merge | Merge strategy for content fusion (see below)    |
+
+**Merge Strategies:**
+
+- **`smart_merge`** (default): Intelligent fusion based on field type
+  - Titles: prefers longer, more informative titles
+  - Content: Mercury Parser takes priority (cleaner extraction)
+  - Descriptions: keeps the most detailed version
+  
+- **`mercury_priority`**: Mercury always overwrites existing data
+  - Use for data migration or when Mercury extraction is preferred
+  
+- **`preserve_existing`**: Only fills empty fields, never overwrites
+  - Safe option for enrichment without data loss
+
+**Pipeline Features:**
+
+- **High-Quality Extraction**: Mercury Parser provides excellent content cleaning
+- **Bidirectional Logic**: 
+  - Empty database + Mercury content → Fills from Mercury
+  - Full database + Empty Mercury → Preserves database (abstains)
+  - Full database + Full Mercury → Applies merge strategy
+- **Automatic Enrichment**: 
+  - Extracts and links media files (images, videos)
+  - Creates expression links from discovered URLs
+  - Updates metadata (author, publication date, language)
+  - Recalculates relevance scores
 
 **Examples:**
 ```bash
+# Basic extraction with smart merge (default)
 python mywi.py land readable --name="AsthmaResearch"
-python mywi.py land readable --name="AsthmaResearch" --limit=20
+
+# Process only first 50 pages with depth limit
+python mywi.py land readable --name="AsthmaResearch" --limit=50 --depth=2
+
+# Mercury priority strategy (overwrites existing data)
+python mywi.py land readable --name="AsthmaResearch" --merge=mercury_priority
+
+# Conservative strategy (only fills empty fields)
+python mywi.py land readable --name="AsthmaResearch" --merge=preserve_existing
+
+# Advanced: Limited processing with specific strategy
+python mywi.py land readable --name="AsthmaResearch" --limit=100 --depth=1 --merge=smart_merge
 ```
+
+**Output:** The pipeline provides detailed statistics including:
+- Number of expressions processed
+- Success/error rates
+- Update counts per field type
+- Performance metrics
+
+**Note:** This pipeline replaces the legacy readable functionality, providing better content quality, robustness, and flexible merge strategies for different use cases.
 
 ### Domain Management
 
@@ -437,6 +520,32 @@ Export data from your lands or tags for analysis in other tools.
 #### 1. Export Land Data
 
 Export data from a land in various formats.
+
+#### 2. Media Analysis
+
+Analyze media files (images, videos, audio) associated with expressions in a land. This command will fetch media, analyze its properties, and store the results in the database.
+
+```bash
+python mywi.py db medianalyse --name=LAND_NAME [--depth=DEPTH] [--minrel=MIN_RELEVANCE]
+```
+
+| Option | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--name` | str | Yes | | Name of the land to analyze media for. |
+| `--depth` | int | No | 0 | Only analyze media for expressions up to this crawl depth. |
+| `--minrel` | float | No | 0.0 | Only analyze media for expressions with relevance greater than or equal to this value. |
+
+**Example:**
+```bash
+python mywi.py db medianalyse --name="AsthmaResearch" --depth=2 --minrel=0.5
+```
+
+**Notes:**
+- This process downloads media files to perform detailed analysis.
+- Configuration for media analysis (e.g., `media_min_width`, `media_max_file_size`) can be found in `settings.py`.
+- The results, including dimensions, file size, format, dominant colors, EXIF data, and perceptual hash, are stored in the database.
+
+---
 
 ```bash
 python mywi.py land export --name="MyResearchTopic" --type=EXPORT_TYPE [--minrel=MINIMUM_RELEVANCE]

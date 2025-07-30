@@ -9,6 +9,7 @@
 mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.py
                                      ↘︎ peewee ORM models (mwi/model.py)
                                      ↘︎ media analysis (mwi/media_analyzer.py)
+                                     ↘︎ readable pipeline (mwi/readable_pipeline.py)
 ```
 
 * **mywi.py**  
@@ -62,7 +63,7 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 | Column | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | `INTEGER` | `PRIMARY KEY` | Auto-incrementing ID |
-| `name` | `TEXT` | `NOT NULL, UNIQUE` | The original word |
+| `term` | `TEXT` | `NOT NULL, UNIQUE` | The original word |
 | `lemma` | `TEXT` | `NOT NULL, INDEX` | The stemmed/lemmatized form |
 
 ### Table: `LandDictionary`
@@ -82,7 +83,7 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 | `id` | `INTEGER` | `PRIMARY KEY` | Auto-incrementing ID |
 | `name` | `TEXT` | `NOT NULL, UNIQUE` | The domain name (e.g., 'lemonde.fr') |
 | `fetched_at` | `DATETIME` | | Timestamp of the last successful crawl |
-| `http_status` | `INTEGER` | | HTTP status code from the last crawl |
+| `http_status` | `TEXT` | | HTTP status code from the last crawl |
 | `title` | `TEXT` | | `<title>` tag content |
 | `keywords` | `TEXT` | | `<meta name="keywords">` content |
 | `description` | `TEXT` | | `<meta name="description">` content |
@@ -97,7 +98,7 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 | `url` | `TEXT` | `NOT NULL, UNIQUE` | The full URL |
 | `html` | `TEXT` | | Raw HTML content (if `settings.archive`) |
 | `readable` | `TEXT` | | Cleaned, readable content (Markdown/HTML) |
-| `relevance` | `REAL` | `DEFAULT 0.0` | Calculated relevance score |
+| `relevance` | `INTEGER` | `DEFAULT 0` | Calculated relevance score |
 | `depth` | `INTEGER` | `DEFAULT 0` | Crawl depth from seed URLs |
 | `lang` | `TEXT` | | Detected language of the page |
 | `title` | `TEXT` | | Page title |
@@ -107,6 +108,8 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 | `domain` | `INTEGER` | `FOREIGN KEY (Domain)` | The domain this URL belongs to |
 | `land` | `INTEGER` | `FOREIGN KEY (Land)` | The project this URL belongs to |
 | `fetched_at` | `DATETIME` | | Timestamp of the last successful fetch |
+| `approved_at` | `DATETIME` | | Timestamp when expression was approved (relevance > 0) |
+| `readable_at` | `DATETIME` | | Timestamp when readable content was extracted |
 | `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Timestamp of creation |
 *Index on (`land`, `fetched_at`, `readable`)*
 
@@ -128,6 +131,21 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 | `url` | `TEXT` | `NOT NULL` | Full URL of the media file |
 | `type` | `TEXT` | | 'img', 'video', or 'audio' |
 | `expression` | `INTEGER` | `FOREIGN KEY (Expression)` | The page where the media was found |
+| `width` | `INTEGER` | | Image width in pixels |
+| `height` | `INTEGER` | | Image height in pixels |
+| `file_size` | `INTEGER` | | File size in bytes |
+| `format` | `TEXT` | | File format (jpg, png, etc.) |
+| `color_mode` | `TEXT` | | Color mode (RGB, RGBA, etc.) |
+| `dominant_colors` | `TEXT` | | JSON array of dominant colors |
+| `has_transparency` | `BOOLEAN` | | Whether image has transparency |
+| `aspect_ratio` | `REAL` | | Width/height ratio |
+| `exif_data` | `TEXT` | | JSON object of EXIF metadata |
+| `image_hash` | `TEXT` | | Perceptual hash for duplicate detection |
+| `content_tags` | `TEXT` | | JSON array of content tags |
+| `nsfw_score` | `REAL` | | NSFW content score |
+| `analyzed_at` | `DATETIME` | | Timestamp of last analysis |
+| `analysis_error` | `TEXT` | | Error message if analysis failed |
+| `websafe_colors` | `TEXT` | | JSON object of web-safe color palette |
 *Index on (`expression`)*
 
 ### Table: `Tag`
@@ -136,11 +154,12 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 | Column | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | `INTEGER` | `PRIMARY KEY` | Auto-incrementing ID |
-| `name` | `TEXT` | `NOT NULL` | The tag's name |
+| `land` | `INTEGER` | `FOREIGN KEY (Land)` | Reference to the Land |
 | `parent` | `INTEGER` | `FOREIGN KEY (Tag)` | Self-referencing for hierarchy |
-| `color` | `TEXT` | | Hex color code for UI |
+| `name` | `TEXT` | `NOT NULL` | The tag's name |
 | `sorting` | `INTEGER` | `DEFAULT 0` | Manual sort order |
-| `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Timestamp of creation |
+| `color` | `TEXT` | | Hex color code for UI |
+*Foreign Key on (`land`)*
 
 ### Table: `TaggedContent`
 *Purpose: A specific text snippet from an `Expression` that has been assigned a `Tag`.*
@@ -148,12 +167,12 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 | Column | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | `INTEGER` | `PRIMARY KEY` | Auto-incrementing ID |
-| `expression` | `INTEGER` | `FOREIGN KEY (Expression)` | The source page |
 | `tag` | `INTEGER` | `FOREIGN KEY (Tag)` | The applied tag |
-| `content` | `TEXT` | | The selected text snippet |
-| `start` | `INTEGER` | | Character start offset in `Expression.readable` |
-| `end` | `INTEGER` | | Character end offset in `Expression.readable` |
-| `created_at` | `DATETIME` | `DEFAULT CURRENT_TIMESTAMP` | Timestamp of creation |
+| `expression` | `INTEGER` | `FOREIGN KEY (Expression)` | The source page |
+| `text` | `TEXT` | | The selected text snippet |
+| `from_char` | `INTEGER` | | Character start offset in `Expression.readable` |
+| `to_char` | `INTEGER` | | Character end offset in `Expression.readable` |
+*Foreign Keys on (`tag`, `expression`)*
 
 ---
 
@@ -191,28 +210,45 @@ python mywi.py db setup
 
 4. **Crawl**  
    ```
-   python mywi.py land crawl --name X [--limit N] [--http 404]
+   python mywi.py land crawl --name X [--limit N] [--http 404] [--depth D]
    ```  
    • Async batches (size = `settings.parallel_connections`).  
-   • For each Expression with empty `readable` it downloads HTML (aiohttp) or archive.org fallback.  
+   • For each Expression with empty `fetched_at` it downloads HTML (aiohttp) or archive.org fallback.  
    • `process_expression_content()` extracts metadata, saves HTML archive optionally, computes relevance, link extraction (→ depth+1).
+   • Dynamic media extraction using Playwright for JavaScript-generated content.
 
 5. **Readable refinement**  
    ```
-   python mywi.py land readable --name X [--limit N]
+   python mywi.py land readable --name X [--limit N] [--depth D] [--merge STRATEGY]
    ```  
-   • Strict pipeline: Trafilatura → Mercury Parser CLI → archive.org → raw HTML.  
-   • Output stored in `Expression.readable` (markdown / HTML).  
-   • Also updates relevance + creates `ExpressionLink`s from markdown links.
+   • **NEW: Mercury Parser Autonomous Pipeline** with intelligent merge strategies.
+   • Strategies: `smart_merge` (default), `mercury_priority`, `preserve_existing`.
+   • Output stored in `Expression.readable` (markdown), creates `ExpressionLink`s and `Media` from markdown links.
+   • Recalculates relevance scores automatically.
 
-6. **Export**  
+6. **Media Analysis**  
+   ```
+   python mywi.py land medianalyse --name X [--depth D] [--minrel R]
+   ```  
+   • Async batch analysis of all media in the land.
+   • Extracts detailed metadata, colors, EXIF, hashes.
+   • Stores results in enhanced `Media` table.
+
+7. **Land Consolidation**  
+   ```
+   python mywi.py land consolidate --name X [--limit N] [--depth D]
+   ```  
+   • Rebuilds internal structure after external modifications.
+   • Recalculates relevance, recreates links and media, adds missing documents.
+
+8. **Export**  
    ```
    python mywi.py land export --name X --type pagecsv|nodegexf|corpus ...
    ```  
    • Delegates to `core.export_land` → `Export` instance.  
-   • Supports seven export variants (see README). File saved under `/data/export_land_<land>_<type>_<timestamp>.*`.
+   • Supports multiple export variants (see README). File saved under `/data/export_land_<land>_<type>_<timestamp>.*`.
 
-7. **Clean / Delete**  
+9. **Clean / Delete**  
    ```
    python mywi.py land delete --name X [--maxrel=0.5]
    ```  
@@ -279,10 +315,11 @@ expression_count → batch_count = ceil(N / parallel_connections)
 ```python
 for tag in ['img','video','audio']:
     src = element['src']
-    if img → only `.jpg` kept
+    if img → check valid extensions (.jpg, .jpeg, .png, .gif, .webp, .bmp, .svg)
+    if video/audio → check valid extensions (.mp4, .webm, .ogg, .ogv, .mov, .avi, .mkv, .mp3, .wav, .aac, .flac, .m4a)
     if src startswith '/' → prepend scheme+domain
 ```
-Saved to `Media`, enabling later download pipelines (not present in repo).
+Saved to `Media`, with dynamic extraction using Playwright for JavaScript content.
 
 ### 4.4 Export Helpers
 
@@ -302,6 +339,16 @@ Saved to `Media`, enabling later download pipelines (not present in repo).
 | `default_timeout` | Seconds for synchronous requests. |
 | `archive` | Boolean → store raw HTML to disk. |
 | `heuristics` | Dict of domain regex rules (extract main host from sub-paths). |
+| `dynamic_media_extraction` | Enable Playwright-based dynamic media extraction. |
+| `media_analysis` | Enable media analysis features. |
+| `media_min_width` | Minimum image width for analysis. |
+| `media_min_height` | Minimum image height for analysis. |
+| `media_max_file_size` | Maximum file size for media analysis. |
+| `media_download_timeout` | Timeout for media downloads. |
+| `media_max_retries` | Maximum retries for media analysis. |
+| `media_extract_colors` | Extract dominant colors from images. |
+| `media_extract_exif` | Extract EXIF metadata from images. |
+| `media_n_dominant_colors` | Number of dominant colors to extract. |
 
 ---
 
@@ -319,10 +366,12 @@ Saved to `Media`, enabling later download pipelines (not present in repo).
 | `mywi.py` | **entry** | `main()` |
 | `mwi/cli.py` | Arg parsing + router | `command_input`, `dispatch`, `command_run` |
 | `mwi/controller.py` | Bridges CLI ↔ business | `LandController`, `DomainController`, … |
-| `mwi/model.py` | Schema | `Land`, `Expression`, … |
+| `mwi/model.py` | Schema | `Land`, `Expression`, `Media` (enhanced) |
 | `mwi/core.py` | Algorithms / I/O | `crawl_land`, `crawl_domains`, `readable_land`, relevance helpers |
 | `mwi/export.py` | CSV/GEXF/Corpus writer | `Export.write_*`, `gexf_node`, `export_tags` |
-| `settings.py` | Config constants | paths, heuristics, timeouts |
+| `mwi/readable_pipeline.py` | Mercury Parser pipeline | `MercuryReadablePipeline`, `run_readable_pipeline` |
+| `mwi/media_analyzer.py` | Media analysis | `MediaAnalyzer`, `analyze_image` |
+| `settings.py` | Config constants | paths, heuristics, timeouts, media settings |
 
 ---
 
@@ -360,6 +409,8 @@ sequenceDiagram
 2. **Change language** → pass `--lang` at `land create`, ensure NLTK stemmer/tokeniser available.  
 3. **Add crawler headers / proxy** → edit `settings` or patch `core.crawl_expression` session logic.  
 4. **Custom tag schema** → use `Tag` hierarchy; exporting will flatten to `parent_child` concatenation.
+5. **Add media analysis** → extend `MediaAnalyzer` class and update `Media` model.
+6. **Custom readable pipeline** → modify `readable_pipeline.py` or create new pipeline.
 
 ---
 
