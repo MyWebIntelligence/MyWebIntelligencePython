@@ -115,8 +115,7 @@ class MercuryReadablePipeline:
         """Récupère les expressions à traiter selon les critères"""
         query = model.Expression.select().where(
             (model.Expression.land == land) &
-            (model.Expression.approved_at.is_null(False)) &
-            (model.Expression.readable_at.is_null(True))
+            (model.Expression.readable.is_null(True))
         )
 
         # Filtre par profondeur si spécifié
@@ -446,7 +445,10 @@ class MercuryReadablePipeline:
 
         # Recalcul de la pertinence si le contenu a changé
         if 'readable' in update.field_updates:
-            setattr(expression, 'relevance', self._calculate_relevance(dictionary, expression))
+            relevance = self._calculate_relevance(dictionary, expression)
+            setattr(expression, 'relevance', relevance)
+            if relevance and relevance > 0:
+                setattr(expression, 'approved_at', datetime.now())
 
         # Sauvegarde de l'expression
         expression.save()

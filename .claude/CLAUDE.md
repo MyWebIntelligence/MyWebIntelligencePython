@@ -1,6 +1,21 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Table of Contents
+- [Project Overview](#project-overview)
+- [Development Commands](#development-commands)
+- [Domain & Media Operations](#domain--media-operations)
+- [Architecture](#architecture)
+  - [Core Components](#core-components)
+  - [Database Schema](#database-schema)
+- [Configuration](#configuration)
+- [Dependencies](#dependencies)
+- [Development Notes](#development-notes)
+- [Testing](#testing)
+- [Installation Requirements](#installation-requirements)
+- [Docker Setup](#docker-setup)
+- [Export Formats](#export-formats)
+  - [Land Exports](#land-exports)
+  - [Tag Exports](#tag-exports)
 
 ## Project Overview
 
@@ -9,71 +24,45 @@ MyWebIntelligence (MyWI) is a Python-based web intelligence tool for digital hum
 ## Development Commands
 
 ### Testing
-```bash
-# Run all tests
-pytest tests/
 
-# Run specific test file
-pytest tests/test_cli.py
-
-# Run specific test method
-pytest tests/test_cli.py::test_functional_test
-```
+| Command                                      | Description                     |
+|----------------------------------------------|---------------------------------|
+| `pytest tests/`                              | Run all tests                   |
+| `pytest tests/test_cli.py`                   | Run specific test file          |
+| `pytest tests/test_cli.py::test_functional_test` | Run specific test method        |
 
 ### Database Management
-```bash
-# Create database schema (destructive)
-python mywi.py db setup
 
-# Run database migrations
-python mywi.py db migrate
-```
+| Command                                      | Description                     |
+|----------------------------------------------|---------------------------------|
+| `python mywi.py db setup`                    | Create database schema (destructive) |
+| `python mywi.py db migrate`                  | Run database migrations         |
 
 ### Land Management
-```bash
-# Create a new research land
-python mywi.py land create --name="ResearchTopic" --desc="Description" --lang="fr"
 
-# List all lands
-python mywi.py land list
+| Command                                      | Description                     |
+|----------------------------------------------|---------------------------------|
+| `python mywi.py land create --name="ResearchTopic" --desc="Description" --lang="fr"` | Create a new research land      |
+| `python mywi.py land list`                    | List all lands                  |
+| `python mywi.py land addterm --land="ResearchTopic" --terms="keyword1, keyword2"` | Add terms to land dictionary    |
+| `python mywi.py land addurl --land="ResearchTopic" --urls="https://example.com"` | Add URLs to land                |
+| `python mywi.py land crawl --name="ResearchTopic"` | Crawl land URLs                |
+| `python mywi.py land readable --name="ResearchTopic" --merge=smart_merge` | Extract readable content using Mercury Parser |
+| `python mywi.py land consolidate --name="ResearchTopic"` | Consolidate land (repair links and media after external modifications) |
+| `python mywi.py land export --name="ResearchTopic" --type=pagecsv` | Export land data               |
+| `python mywi.py db medianalyse --name="ResearchTopic"` | Analyze media in land          |
 
-# Add terms to land dictionary
-python mywi.py land addterm --land="ResearchTopic" --terms="keyword1, keyword2"
+### Domain & Media Operations
 
-# Add URLs to land
-python mywi.py land addurl --land="ResearchTopic" --urls="https://example.com"
-
-# Crawl land URLs
-python mywi.py land crawl --name="ResearchTopic"
-
-# Extract readable content using Mercury Parser
-python mywi.py land readable --name="ResearchTopic" --merge=smart_merge
-
-# Consolidate land (repair links and media after external modifications)
-python mywi.py land consolidate --name="ResearchTopic"
-
-# Export land data
-python mywi.py land export --name="ResearchTopic" --type=pagecsv
-
-# Analyze media in land
-python mywi.py db medianalyse --name="ResearchTopic"
-```
-
-### Domain and Media Operations
-```bash
-# Crawl domains
-python mywi.py domain crawl
-
-# Export tags
-python mywi.py tag export --name="ResearchTopic" --type=matrix
-
-# Update heuristics
-python mywi.py heuristic update
-```
+| Command                                      | Description                     |
+|----------------------------------------------|---------------------------------|
+| `python mywi.py domain crawl`                | Crawl domains                  |
+| `python mywi.py tag export --name="ResearchTopic" --type=matrix` | Export tags                   |
+| `python mywi.py heuristic update`            | Update heuristics              |
 
 ## Architecture
 
-### Core Components
+#### Core Components
 - **mywi.py**: Entry point that invokes CLI
 - **mwi/cli.py**: Command-line interface parser and dispatcher
 - **mwi/controller.py**: Controllers mapping verbs to business logic
@@ -83,7 +72,7 @@ python mywi.py heuristic update
 - **mwi/media_analyzer.py**: Media analysis with color extraction and metadata
 - **mwi/readable_pipeline.py**: Mercury Parser integration for content extraction
 
-### Database Schema (SQLite via Peewee)
+#### Database Schema
 - **Land**: Research projects/topics
 - **Expression**: Individual URLs/pages with relevance scoring
 - **ExpressionLink**: Directed links between expressions
@@ -177,7 +166,7 @@ docker run -dit --name mwi -v /path/to/data:/data mwi:latest
 
 ## Export Formats
 
-### Land Exports
+#### Land Exports
 - `pagecsv`: CSV of pages with metadata
 - `fullpagecsv`: CSV with full page content
 - `pagegexf`: GEXF graph format for network analysis
@@ -186,6 +175,6 @@ docker run -dit --name mwi -v /path/to/data:/data mwi:latest
 - `mediacsv`: CSV of media links
 - `corpus`: Raw text corpus
 
-### Tag Exports
+#### Tag Exports
 - `matrix`: Tag co-occurrence matrix
 - `content`: Content associated with tags
