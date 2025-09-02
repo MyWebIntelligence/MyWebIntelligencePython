@@ -4,7 +4,7 @@ Strings are empty by default except `data_location` which defaults to "/data".
 """
 
 # Paths
-data_location = "data"
+data_location = "/data"
 
 archive = False
 
@@ -46,6 +46,24 @@ media_n_dominant_colors = 5
 openrouter_enabled = False
 openrouter_api_key = ""
 openrouter_model = ""
+ # Exemples de modèles compatibles OpenRouter (mini/éco)
+ # Renseignez `openrouter_model` avec l'un de ces slugs si vous activez la passerelle
+openrouter_model_examples = [
+    # OpenAI
+    "openai/gpt-4o-mini",
+    # Anthropic
+    "anthropic/claude-3-haiku",
+    # Google
+    "google/gemini-1.5-flash",
+    # Meta (Llama 3.x Instruct – 8B)
+    "meta-llama/llama-3.1-8b-instruct",
+    # Mistral
+    "mistralai/mistral-small-latest",
+    # Qwen (Alibaba)
+    "qwen/qwen2.5-7b-instruct",
+    # Cohere
+    "cohere/command-r-mini",
+]
 openrouter_timeout = 15  # seconds
 # Bounds to control costs/latency
 openrouter_readable_max_chars = 12000

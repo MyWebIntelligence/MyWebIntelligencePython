@@ -830,7 +830,6 @@ async def crawl_expression_with_media_analysis(expression: model.Expression, dic
         # Compute relevance with OpenRouter gate when enabled
         try:
             from .llm_openrouter import is_relevant_via_openrouter  # local import to avoid overhead when disabled
-            import settings
             if getattr(settings, 'openrouter_enabled', False) and settings.openrouter_api_key and settings.openrouter_model:
                 verdict = is_relevant_via_openrouter(expression.land, expression)  # type: ignore
                 if verdict is False:
@@ -917,7 +916,6 @@ async def consolidate_land(land: model.Land, limit: int = 0, depth: Optional[int
                 # 2. Recalculer la relevance (avec garde-fou OpenRouter) et le contenu
                 try:
                     from .llm_openrouter import is_relevant_via_openrouter
-                    import settings
                     if getattr(settings, 'openrouter_enabled', False) and settings.openrouter_api_key and settings.openrouter_model:
                         verdict = is_relevant_via_openrouter(land, expr)  # type: ignore
                         if verdict is False:
@@ -1129,7 +1127,6 @@ async def crawl_expression(expression: model.Expression, dictionary, session: ai
         # Compute relevance with OpenRouter gate when enabled
         try:
             from .llm_openrouter import is_relevant_via_openrouter
-            import settings
             if getattr(settings, 'openrouter_enabled', False) and settings.openrouter_api_key and settings.openrouter_model:
                 verdict = is_relevant_via_openrouter(expression.land, expression)  # type: ignore
                 if verdict is False:
@@ -1416,7 +1413,6 @@ def process_expression_content(expression: model.Expression, html: str, dictiona
         # Compute relevance with OpenRouter gate when enabled
         try:
             from .llm_openrouter import is_relevant_via_openrouter
-            import settings
             if getattr(settings, 'openrouter_enabled', False) and settings.openrouter_api_key and settings.openrouter_model:
                 verdict = is_relevant_via_openrouter(expression.land, expression)  # type: ignore
                 if verdict is False:
