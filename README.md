@@ -82,6 +82,20 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 Key variables in `settings.py`:
 - `data_location`, `user_agent`, `parallel_connections`, `default_timeout`, `archive`, `heuristics`.
 
+#### Optional: OpenRouter Relevance Gate (AI yes/no filter)
+
+If enabled, pages are first judged by an LLM (via OpenRouter) as relevant (yes) or not (no). A "no" sets `relevance=0` and skips further processing; otherwise, the classic weighted relevance is computed. This applies during crawl/readable/consolidation, but not during bulk recomputation (`land addterm`).
+
+Environment-configurable variables:
+- `MWI_OPENROUTER_ENABLED` (default `false`)
+- `MWI_OPENROUTER_API_KEY`
+- `MWI_OPENROUTER_MODEL` (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-haiku`)
+- `MWI_OPENROUTER_TIMEOUT` (default `15` seconds)
+- `MWI_OPENROUTER_READABLE_MAX_CHARS` (default `6000`)
+- `MWI_OPENROUTER_MAX_CALLS_PER_RUN` (default `500`)
+
+Note: When disabled or not configured, the system behaves exactly as before.
+
 ### Testing
 
 - `tests/test_cli.py`: CLI smoke tests.

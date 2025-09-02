@@ -443,9 +443,24 @@ class MercuryReadablePipeline:
         setattr(expression, 'readable_at', datetime.now())
         print(f"🕒 Updated timestamp for URL {expression.url}: {expression.readable_at}")
 
-        # Recalcul de la pertinence si le contenu a changé
+        # Recalcul de la pertinence si le contenu a changé (avec garde-fou OpenRouter)
         if 'readable' in update.field_updates:
-            relevance = self._calculate_relevance(dictionary, expression)
+            relevance = None
+            try:
+                import settings
+                if getattr(settings, 'openrouter_enabled', False) and settings.openrouter_api_key and settings.openrouter_model:
+                    from .llm_openrouter import is_relevant_via_openrouter
+                    verdict = is_relevant_via_openrouter(expression.land, expression)
+                    if verdict is False:
+                        relevance = 0
+                    else:
+                        relevance = self._calculate_relevance(dictionary, expression)
+                else:
+                    relevance = self._calculate_relevance(dictionary, expression)
+            except Exception as e:
+                print(f"OpenRouter gate error for {expression.url}: {e}")
+                relevance = self._calculate_relevance(dictionary, expression)
+
             setattr(expression, 'relevance', relevance)
             if relevance and relevance > 0:
                 setattr(expression, 'approved_at', datetime.now())

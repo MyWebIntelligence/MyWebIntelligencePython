@@ -39,3 +39,13 @@ media_analyze_content = False
 media_extract_colors = True
 media_extract_exif = True
 media_n_dominant_colors = 5
+
+# OpenRouter relevance gate (disabled by default)
+# These can be overridden via environment variables for safe deployments.
+openrouter_enabled = os.environ.get("MWI_OPENROUTER_ENABLED", "false").lower() in ("1", "true", "yes")
+openrouter_api_key = os.environ.get("MWI_OPENROUTER_API_KEY", None)
+openrouter_model = os.environ.get("MWI_OPENROUTER_MODEL", None)
+openrouter_timeout = int(os.environ.get("MWI_OPENROUTER_TIMEOUT", "15"))  # seconds
+# Bounds to control costs/latency
+openrouter_readable_max_chars = int(os.environ.get("MWI_OPENROUTER_READABLE_MAX_CHARS", "12000"))
+openrouter_max_calls_per_run = int(os.environ.get("MWI_OPENROUTER_MAX_CALLS_PER_RUN", "500"))

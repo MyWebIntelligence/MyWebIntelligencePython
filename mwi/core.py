@@ -827,7 +827,21 @@ async def crawl_expression_with_media_analysis(expression: model.Expression, dic
         expression.description = str(get_description(soup)) if get_description(soup) else None # type: ignore
         expression.keywords = str(get_keywords(soup)) if get_keywords(soup) else None # type: ignore
         expression.lang = str(soup.html.get('lang', '')) if soup.html else '' # type: ignore
-        expression.relevance = expression_relevance(dictionary, expression) # type: ignore
+        # Compute relevance with OpenRouter gate when enabled
+        try:
+            from .llm_openrouter import is_relevant_via_openrouter  # local import to avoid overhead when disabled
+            import settings
+            if getattr(settings, 'openrouter_enabled', False) and settings.openrouter_api_key and settings.openrouter_model:
+                verdict = is_relevant_via_openrouter(expression.land, expression)  # type: ignore
+                if verdict is False:
+                    expression.relevance = 0  # type: ignore
+                else:
+                    expression.relevance = expression_relevance(dictionary, expression)  # type: ignore
+            else:
+                expression.relevance = expression_relevance(dictionary, expression)  # type: ignore
+        except Exception as e:
+            print(f"OpenRouter gate error for {expression.url}: {e}")
+            expression.relevance = expression_relevance(dictionary, expression)  # type: ignore
         expression.readable_at = model.datetime.datetime.now() # type: ignore
         if expression.relevance is not None and expression.relevance > 0: # type: ignore
             expression.approved_at = model.datetime.datetime.now() # type: ignore
@@ -900,8 +914,21 @@ async def consolidate_land(land: model.Land, limit: int = 0, depth: Optional[int
                 model.ExpressionLink.delete().where(model.ExpressionLink.source == expr.id).execute()
                 model.Media.delete().where(model.Media.expression == expr.id).execute()
 
-                # 2. Recalculer la relevance et le contenu
-                expr.relevance = expression_relevance(dictionary, expr) # type: ignore
+                # 2. Recalculer la relevance (avec garde-fou OpenRouter) et le contenu
+                try:
+                    from .llm_openrouter import is_relevant_via_openrouter
+                    import settings
+                    if getattr(settings, 'openrouter_enabled', False) and settings.openrouter_api_key and settings.openrouter_model:
+                        verdict = is_relevant_via_openrouter(land, expr)  # type: ignore
+                        if verdict is False:
+                            expr.relevance = 0  # type: ignore
+                        else:
+                            expr.relevance = expression_relevance(dictionary, expr)  # type: ignore
+                    else:
+                        expr.relevance = expression_relevance(dictionary, expr)  # type: ignore
+                except Exception as e:
+                    print(f"OpenRouter gate error for {expr.url}: {e}")
+                    expr.relevance = expression_relevance(dictionary, expr)  # type: ignore
                 expr.save()
 
                 # 3. Extraire les liens sortants du contenu lisible
@@ -1099,7 +1126,21 @@ async def crawl_expression(expression: model.Expression, dictionary, session: ai
         expression.description = str(get_description(soup)) if get_description(soup) else None # type: ignore
         expression.keywords = str(get_keywords(soup)) if get_keywords(soup) else None # type: ignore
         expression.lang = str(soup.html.get('lang', '')) if soup.html else '' # type: ignore
-        expression.relevance = expression_relevance(dictionary, expression) # type: ignore
+        # Compute relevance with OpenRouter gate when enabled
+        try:
+            from .llm_openrouter import is_relevant_via_openrouter
+            import settings
+            if getattr(settings, 'openrouter_enabled', False) and settings.openrouter_api_key and settings.openrouter_model:
+                verdict = is_relevant_via_openrouter(expression.land, expression)  # type: ignore
+                if verdict is False:
+                    expression.relevance = 0  # type: ignore
+                else:
+                    expression.relevance = expression_relevance(dictionary, expression)  # type: ignore
+            else:
+                expression.relevance = expression_relevance(dictionary, expression)  # type: ignore
+        except Exception as e:
+            print(f"OpenRouter gate error for {expression.url}: {e}")
+            expression.relevance = expression_relevance(dictionary, expression)  # type: ignore
         expression.readable_at = model.datetime.datetime.now() # type: ignore
         if expression.relevance is not None and expression.relevance > 0: # type: ignore
             expression.approved_at = model.datetime.datetime.now() # type: ignore
@@ -1372,7 +1413,21 @@ def process_expression_content(expression: model.Expression, html: str, dictiona
     if expression.lang and expression.land.lang and expression.lang != expression.land.lang:
         expression.relevance = 0 # type: ignore
     else:
-        expression.relevance = expression_relevance(dictionary, expression) # type: ignore
+        # Compute relevance with OpenRouter gate when enabled
+        try:
+            from .llm_openrouter import is_relevant_via_openrouter
+            import settings
+            if getattr(settings, 'openrouter_enabled', False) and settings.openrouter_api_key and settings.openrouter_model:
+                verdict = is_relevant_via_openrouter(expression.land, expression)  # type: ignore
+                if verdict is False:
+                    expression.relevance = 0  # type: ignore
+                else:
+                    expression.relevance = expression_relevance(dictionary, expression)  # type: ignore
+            else:
+                expression.relevance = expression_relevance(dictionary, expression)  # type: ignore
+        except Exception as e:
+            print(f"OpenRouter gate error for {expression.url}: {e}")
+            expression.relevance = expression_relevance(dictionary, expression)  # type: ignore
 
     if expression.relevance is not None and expression.relevance > 0: # type: ignore
         print(f"Expression #{expression.id} approved") # type: ignore
