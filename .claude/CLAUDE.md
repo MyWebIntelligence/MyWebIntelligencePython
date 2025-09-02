@@ -50,7 +50,7 @@ MyWebIntelligence (MyWI) is a Python-based web intelligence tool for digital hum
 | `python mywi.py land readable --name="ResearchTopic" --merge=smart_merge` | Extract readable content using Mercury Parser |
 | `python mywi.py land consolidate --name="ResearchTopic"` | Consolidate land (repair links and media after external modifications) |
 | `python mywi.py land export --name="ResearchTopic" --type=pagecsv` | Export land data               |
-| `python mywi.py db medianalyse --name="ResearchTopic"` | Analyze media in land          |
+| `python mywi.py land medianalyse --name="ResearchTopic"` | Analyze media in land          |
 
 ### Domain & Media Operations
 

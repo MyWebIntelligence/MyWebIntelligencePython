@@ -16,6 +16,7 @@ MyWebIntelligence (MyWI) is a Python-based tool designed to assist researchers i
   - [Exporting Data](#exporting-data)
   - [Heuristics](#heuristics)
 - [Testing](#testing)
+- [SQLite Recovery](#sqlite-recovery)
 - [License](#license)
 
 ## Features
@@ -63,7 +64,7 @@ mywi.py  →  mwi/cli.py  →  mwi/controller.py  →  mwi/core.py & mwi/export.
 ### Main Workflows
 
 - **Project Bootstrap**: `python mywi.py db setup`
-- **Media Analysis**: `python mywi.py db medianalyse --name=LAND_NAME [--depth=DEPTH] [--minrel=MIN_RELEVANCE]`
+- **Media Analysis**: `python mywi.py land medianalyse --name=LAND_NAME [--depth=DEPTH] [--minrel=MIN_RELEVANCE]`
 - **Land Life-Cycle**: Create, add terms, add URLs, crawl, extract readable, export, clean/delete.
 - **Domain Processing**: `python mywi.py domain crawl`
 - **Tag Export**: `python mywi.py tag export`
@@ -525,7 +526,7 @@ Export data from a land in various formats.
 Analyze media files (images, videos, audio) associated with expressions in a land. This command will fetch media, analyze its properties, and store the results in the database.
 
 ```bash
-python mywi.py db medianalyse --name=LAND_NAME [--depth=DEPTH] [--minrel=MIN_RELEVANCE]
+python mywi.py land medianalyse --name=LAND_NAME [--depth=DEPTH] [--minrel=MIN_RELEVANCE]
 ```
 
 | Option | Type | Required | Default | Description |
@@ -536,7 +537,7 @@ python mywi.py db medianalyse --name=LAND_NAME [--depth=DEPTH] [--minrel=MIN_REL
 
 **Example:**
 ```bash
-python mywi.py db medianalyse --name="AsthmaResearch" --depth=2 --minrel=0.5
+python mywi.py land medianalyse --name="AsthmaResearch" --depth=2 --minrel=0.5
 ```
 
 **Notes:**
@@ -626,6 +627,40 @@ To run a specific test method within a file:
 ```bash
 pytest tests/test_cli.py::test_functional_test
 ```
+
+## SQLite Recovery
+
+If your SQLite database becomes corrupted (e.g., "database disk image is malformed"), you can attempt a non-destructive recovery with the included helper script. It backs up the original DB, tries `sqlite3 .recover` (then `.dump` as a fallback), rebuilds a new DB, and verifies integrity.
+
+Prerequisites:
+- `sqlite3` available in your shell.
+
+Steps:
+```bash
+chmod +x scripts/sqlite_recover.sh
+# Usage: scripts/sqlite_recover.sh [INPUT_DB] [OUTPUT_DB]
+scripts/sqlite_recover.sh data/mwi.db data/mwi_repaired.db
+```
+
+What it does:
+- Backs up `data/mwi.db` (+ `-wal` / `-shm` if present) to `data/sqlite_repair_<timestamp>/backup/`
+- Attempts `.recover` first, falls back to `.dump` into `data/sqlite_repair_<timestamp>/dump/`
+- Rebuilds `data/mwi_repaired.db`, runs `PRAGMA integrity_check;` and lists tables under `data/sqlite_repair_<timestamp>/logs/`
+
+Validate the repaired DB with MyWI without replacing the original:
+```bash
+mkdir -p data/test-repaired
+cp data/mwi_repaired.db data/test-repaired/mwi.db
+MWI_DATA_LOCATION="$PWD/data/test-repaired" venv/bin/python mywi.py land list
+```
+
+If everything looks good, adopt the repaired DB (after a manual backup):
+```bash
+cp data/mwi.db data/mwi.db.bak_$(date +%Y%m%d_%H%M%S)
+mv data/mwi_repaired.db data/mwi.db
+```
+
+Note: You can temporarily point the app to a different data directory using the `MWI_DATA_LOCATION` environment variable; it overrides `settings.py:data_location` for that session.
 
 ## License
 

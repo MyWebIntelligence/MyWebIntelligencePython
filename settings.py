@@ -1,4 +1,8 @@
-data_location = "/data"
+import os
+
+# Allow overriding data location via env var for local/dev flows
+# Defaults to "/data" (Docker convention). Set MWI_DATA_LOCATION to use a custom path.
+data_location = os.environ.get("MWI_DATA_LOCATION", "/data")
 
 archive = False
 
