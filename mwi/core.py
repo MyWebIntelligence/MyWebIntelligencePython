@@ -615,6 +615,8 @@ async def crawl_land(land: model.Land, limit: int = 0, http: Optional[str] = Non
 
     total_processed = 0
     total_errors = 0
+    # Track how many expressions we attempted to crawl to enforce --limit
+    total_attempted = 0
 
     # If depth is specified, only process that depth
     if depth is not None:
@@ -660,20 +662,39 @@ async def crawl_land(land: model.Land, limit: int = 0, http: Optional[str] = Non
 
         for current_batch in range(batch_count):
             print(f"Batch {current_batch + 1}/{batch_count} for depth {current_depth}")
+            # Determine base batch limit from remaining rows in this depth
             batch_limit = last_batch_size if (current_batch + 1 == batch_count and last_batch_size != 0) else batch_size
-            current_expressions = expressions.limit(batch_limit).offset(current_offset)
+            # Enforce the global --limit on attempts (not only successes)
+            if limit > 0:
+                remaining = max(0, limit - total_attempted)
+                if remaining == 0:
+                    return total_processed, total_errors
+                effective_batch_limit = min(batch_limit, remaining)
+            else:
+                effective_batch_limit = batch_limit
+
+            current_expressions_query = expressions.limit(effective_batch_limit).offset(current_offset)
+            current_batch_expressions = list(current_expressions_query)
+            attempted_in_batch = len(current_batch_expressions)
+
+            if attempted_in_batch == 0:
+                break
 
             connector = aiohttp.TCPConnector(limit=settings.parallel_connections, ssl=False)
             async with aiohttp.ClientSession(connector=connector) as session:
-                tasks = [crawl_expression_with_media_analysis(expr, dictionary, session) for expr in current_expressions]
+                tasks = [
+                    crawl_expression_with_media_analysis(expr, dictionary, session)
+                    for expr in current_batch_expressions
+                ]
                 results = await asyncio.gather(*tasks)
                 processed_in_batch = sum(results)
                 total_processed += processed_in_batch
-                total_errors += (batch_limit - processed_in_batch)
+                total_errors += (attempted_in_batch - processed_in_batch)
+                total_attempted += attempted_in_batch
 
-            current_offset += batch_size
+            current_offset += attempted_in_batch
 
-            if limit > 0 and total_processed >= limit:
+            if limit > 0 and total_attempted >= limit:
                 return total_processed, total_errors
 
     return total_processed, total_errors
